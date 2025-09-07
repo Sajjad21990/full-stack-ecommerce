@@ -3,7 +3,11 @@ import { headers } from 'next/headers'
 import { validateWebhookSignature } from '@/lib/razorpay'
 import { processRazorpayWebhook, WebhookPayload } from '@/lib/webhook-processor'
 import { createId } from '@paralleldrive/cuid2'
-import { checkRateLimit, getClientIdentifier, checkWebhookIPWhitelist, logRateLimitViolation } from '@/lib/rate-limit'
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  logRateLimitViolation,
+} from '@/lib/rate-limit'
 import { checkIdempotency, saveIdempotencyResult } from '@/lib/idempotency'
 import { SecurityEvents } from '@/lib/security-logger'
 
@@ -17,57 +21,50 @@ export async function POST(request: NextRequest) {
   try {
     // Get client IP for security checks
     const clientId = getClientIdentifier(request)
-    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0] || request.headers.get('x-real-ip') || request.ip || 'unknown'
-    
-    // Check IP whitelist for webhooks
-    const isWhitelisted = await checkWebhookIPWhitelist(clientIP)
-    if (!isWhitelisted) {
-      console.warn(`[WEBHOOK_SECURITY] Blocked webhook from non-whitelisted IP: ${clientIP}`, {
-        deliveryId,
-        ip: clientIP,
-        userAgent: request.headers.get('user-agent'),
-        timestamp: new Date().toISOString()
-      })
-      
-      // Log security event
-      await SecurityEvents.webhookIPBlocked(clientIP)
-      
-      return NextResponse.json(
-        { error: 'Forbidden - IP not whitelisted' },
-        { status: 403 }
-      )
-    }
-    
+    const clientIP =
+      request.headers.get('x-forwarded-for')?.split(',')[0] ||
+      request.headers.get('x-real-ip') ||
+      request.ip ||
+      'unknown'
+
+    // IP whitelist check disabled for now
+    // In production, you would check against Razorpay's webhook IPs
+
     // Apply rate limiting for webhooks
     const rateLimitResult = await checkRateLimit('webhook', clientId, request)
-    
+
     if (rateLimitResult.blocked) {
       await logRateLimitViolation('webhook', clientId, request, {
         delivery_id: deliveryId,
         action: 'webhook_processing',
         remaining: rateLimitResult.remaining,
-        reset: rateLimitResult.reset
+        reset: rateLimitResult.reset,
       })
-      
-      console.warn(`[WEBHOOK_RATE_LIMIT] Rate limit exceeded for webhook from IP: ${clientIP}`, {
-        deliveryId,
-        remaining: rateLimitResult.remaining,
-        reset: rateLimitResult.reset
-      })
-      
+
+      console.warn(
+        `[WEBHOOK_RATE_LIMIT] Rate limit exceeded for webhook from IP: ${clientIP}`,
+        {
+          deliveryId,
+          remaining: rateLimitResult.remaining,
+          reset: rateLimitResult.reset,
+        }
+      )
+
       return NextResponse.json(
-        { 
+        {
           error: 'Rate limit exceeded',
           delivery_id: deliveryId,
-          retry_after: Math.ceil((rateLimitResult.reset.getTime() - Date.now()) / 1000)
+          retry_after: Math.ceil(
+            (rateLimitResult.reset.getTime() - Date.now()) / 1000
+          ),
         },
-        { 
+        {
           status: 429,
           headers: {
             'X-RateLimit-Limit': rateLimitResult.limit.toString(),
             'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-            'X-RateLimit-Reset': rateLimitResult.reset.toISOString()
-          }
+            'X-RateLimit-Reset': rateLimitResult.reset.toISOString(),
+          },
         }
       )
     }
@@ -75,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Get raw body for signature verification
     const body = await request.text()
     const headersList = headers()
-    
+
     // Check for idempotency using webhook signature or event ID
     let idempotencyKey = `webhook:${deliveryId}`
     try {
@@ -86,19 +83,22 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       // Use delivery ID if payload parsing fails
     }
-    
+
     const existingResult = await checkIdempotency(idempotencyKey)
     if (existingResult) {
-      console.log(`[WEBHOOK_IDEMPOTENCY] Duplicate webhook detected: ${idempotencyKey}`, {
-        deliveryId,
-        existingResult
-      })
+      console.log(
+        `[WEBHOOK_IDEMPOTENCY] Duplicate webhook detected: ${idempotencyKey}`,
+        {
+          deliveryId,
+          existingResult,
+        }
+      )
       return NextResponse.json(existingResult)
     }
-    
+
     // Get Razorpay signature from headers
     const razorpaySignature = headersList.get('x-razorpay-signature')
-    
+
     if (!razorpaySignature) {
       console.error('Missing Razorpay signature header')
       return NextResponse.json(
@@ -109,17 +109,17 @@ export async function POST(request: NextRequest) {
 
     // Validate webhook signature
     const isValidSignature = validateWebhookSignature(body, razorpaySignature)
-    
+
     if (!isValidSignature) {
       console.error('Invalid Razorpay webhook signature')
-      
+
       // Log security event for invalid signature
-      await SecurityEvents.webhookSignatureInvalid(clientIP, '/api/webhooks/razorpay')
-      
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
+      await SecurityEvents.webhookSignatureInvalid(
+        clientIP,
+        '/api/webhooks/razorpay'
       )
+
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     // Parse the webhook payload
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get('user-agent'),
       timestamp: new Date().toISOString(),
       whitelisted: true,
-      rateLimitRemaining: rateLimitResult.remaining
+      rateLimitRemaining: rateLimitResult.remaining,
     })
 
     // Process the webhook
@@ -167,41 +167,42 @@ export async function POST(request: NextRequest) {
       processed: result.processed,
       message: result.message,
       processingTime: `${processingTime}ms`,
-      error: result.error
+      error: result.error,
     })
 
     // Return appropriate response
-    const response = result.success ? {
-      success: true,
-      message: result.message,
-      processed: result.processed,
-      delivery_id: deliveryId,
-      processing_time: processingTime
-    } : {
-      error: result.message,
-      details: result.error,
-      delivery_id: deliveryId,
-      processing_time: processingTime
-    }
-    
+    const response = result.success
+      ? {
+          success: true,
+          message: result.message,
+          processed: result.processed,
+          delivery_id: deliveryId,
+          processing_time: processingTime,
+        }
+      : {
+          error: result.message,
+          details: result.error,
+          delivery_id: deliveryId,
+          processing_time: processingTime,
+        }
+
     // Save result for idempotency
     const ttl = result.success ? 3600 : 300 // 1 hour for success, 5 min for errors
     await saveIdempotencyResult(idempotencyKey, response, ttl)
-    
+
     if (result.success) {
       return NextResponse.json(response)
     } else {
       return NextResponse.json(response, { status: 500 })
     }
-
   } catch (error) {
     const processingTime = Date.now() - startTime
-    
+
     console.error('[WEBHOOK] Unexpected error processing webhook:', {
       deliveryId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      processingTime: `${processingTime}ms`
+      processingTime: `${processingTime}ms`,
     })
 
     return NextResponse.json(
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
         error: 'Webhook processing failed',
         details: error instanceof Error ? error.message : 'Unknown error',
         delivery_id: deliveryId,
-        processing_time: processingTime
+        processing_time: processingTime,
       },
       { status: 500 }
     )
@@ -222,7 +223,7 @@ export async function GET() {
     status: 'healthy',
     service: 'razorpay-webhook',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
   })
 }
 

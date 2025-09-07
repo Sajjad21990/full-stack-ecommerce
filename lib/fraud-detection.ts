@@ -1,4 +1,4 @@
-'use server'
+// Fraud detection module
 
 import { db } from '@/lib/db'
 import { orders, payments } from '@/db/schema/orders'
@@ -31,7 +31,9 @@ export interface PaymentContext {
 /**
  * Analyze payment for fraud risk
  */
-export async function analyzePaymentFraud(context: PaymentContext): Promise<FraudRisk> {
+export async function analyzePaymentFraud(
+  context: PaymentContext
+): Promise<FraudRisk> {
   const flags: string[] = []
   const reasons: string[] = []
   let score = 0
@@ -83,7 +85,7 @@ export async function analyzePaymentFraud(context: PaymentContext): Promise<Frau
       score,
       reasons,
       flags,
-      recommendations
+      recommendations,
     })
 
     return {
@@ -91,19 +93,18 @@ export async function analyzePaymentFraud(context: PaymentContext): Promise<Frau
       score: Math.min(score, 100), // Cap at 100
       reasons: [...new Set(reasons)], // Remove duplicates
       flags: [...new Set(flags)],
-      recommendations
+      recommendations,
     }
-
   } catch (error) {
     console.error('Error in fraud analysis:', error)
-    
+
     // Return safe default on error
     return {
       level: 'medium',
       score: 50,
       reasons: ['Analysis failed - manual review required'],
       flags: ['ANALYSIS_ERROR'],
-      recommendations: ['Manual review required']
+      recommendations: ['Manual review required'],
     }
   }
 }
@@ -128,27 +129,33 @@ async function checkAmountAnomalies(context: PaymentContext): Promise<{
         gte(orders.createdAt, sql`NOW() - INTERVAL '30 days'`)
       ),
       limit: 50,
-      orderBy: desc(orders.createdAt)
+      orderBy: desc(orders.createdAt),
     })
 
     if (recentPayments.length > 0) {
-      const amounts = recentPayments.map(p => p.totalAmount)
-      const avgAmount = amounts.reduce((sum, amt) => sum + amt, 0) / amounts.length
+      const amounts = recentPayments.map((p) => p.totalAmount)
+      const avgAmount =
+        amounts.reduce((sum, amt) => sum + amt, 0) / amounts.length
       const maxAmount = Math.max(...amounts)
 
       // Very high amount compared to history
       if (context.amount > avgAmount * 10) {
         score += 25
         flags.push('HIGH_AMOUNT_DEVIATION')
-        reasons.push(`Amount ${context.amount/100} is 10x higher than average ${avgAmount/100}`)
+        reasons.push(
+          `Amount ${context.amount / 100} is 10x higher than average ${avgAmount / 100}`
+        )
       } else if (context.amount > avgAmount * 5) {
         score += 15
         flags.push('MEDIUM_AMOUNT_DEVIATION')
-        reasons.push(`Amount ${context.amount/100} is 5x higher than average ${avgAmount/100}`)
+        reasons.push(
+          `Amount ${context.amount / 100} is 5x higher than average ${avgAmount / 100}`
+        )
       }
 
       // Suspiciously round numbers
-      if (context.amount % 100000 === 0 && context.amount > 500000) { // Round to thousands and > 5000
+      if (context.amount % 100000 === 0 && context.amount > 500000) {
+        // Round to thousands and > 5000
         score += 10
         flags.push('ROUND_AMOUNT')
         reasons.push('Suspiciously round payment amount')
@@ -156,23 +163,25 @@ async function checkAmountAnomalies(context: PaymentContext): Promise<{
     }
 
     // Very high amounts (potential stolen cards)
-    if (context.amount > 10000000) { // > 100,000 INR
+    if (context.amount > 10000000) {
+      // > 100,000 INR
       score += 20
       flags.push('VERY_HIGH_AMOUNT')
       reasons.push('Very high payment amount')
-    } else if (context.amount > 5000000) { // > 50,000 INR
+    } else if (context.amount > 5000000) {
+      // > 50,000 INR
       score += 10
       flags.push('HIGH_AMOUNT')
       reasons.push('High payment amount')
     }
 
     // Very small amounts (potential card testing)
-    if (context.amount < 100) { // < 1 INR
+    if (context.amount < 100) {
+      // < 1 INR
       score += 15
       flags.push('CARD_TESTING')
       reasons.push('Very small amount - possible card testing')
     }
-
   } catch (error) {
     console.error('Error in amount anomaly check:', error)
   }
@@ -198,7 +207,7 @@ async function checkVelocityAnomalies(context: PaymentContext): Promise<{
       where: and(
         eq(orders.email, context.email),
         gte(orders.createdAt, sql`NOW() - INTERVAL '1 hour'`)
-      )
+      ),
     })
 
     // Check orders in last 24 hours
@@ -206,7 +215,7 @@ async function checkVelocityAnomalies(context: PaymentContext): Promise<{
       where: and(
         eq(orders.email, context.email),
         gte(orders.createdAt, sql`NOW() - INTERVAL '24 hours'`)
-      )
+      ),
     })
 
     // Too many orders in short time
@@ -232,15 +241,18 @@ async function checkVelocityAnomalies(context: PaymentContext): Promise<{
 
     // Check for rapid successive orders (within minutes)
     if (lastHourOrders.length > 1) {
-      const sortedOrders = lastHourOrders.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      const sortedOrders = lastHourOrders.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
-      
+
       for (let i = 0; i < sortedOrders.length - 1; i++) {
-        const timeDiff = new Date(sortedOrders[i].createdAt).getTime() - 
-                        new Date(sortedOrders[i + 1].createdAt).getTime()
-        
-        if (timeDiff < 60000) { // Less than 1 minute
+        const timeDiff =
+          new Date(sortedOrders[i].createdAt).getTime() -
+          new Date(sortedOrders[i + 1].createdAt).getTime()
+
+        if (timeDiff < 60000) {
+          // Less than 1 minute
           score += 20
           flags.push('RAPID_SUCCESSION')
           reasons.push('Multiple orders within minutes')
@@ -248,7 +260,6 @@ async function checkVelocityAnomalies(context: PaymentContext): Promise<{
         }
       }
     }
-
   } catch (error) {
     console.error('Error in velocity check:', error)
   }
@@ -276,18 +287,24 @@ async function checkGeographicAnomalies(context: PaymentContext): Promise<{
       if (billingAddress.country !== shippingAddress.country) {
         score += 15
         flags.push('COUNTRY_MISMATCH')
-        reasons.push(`Billing (${billingAddress.country}) and shipping (${shippingAddress.country}) in different countries`)
+        reasons.push(
+          `Billing (${billingAddress.country}) and shipping (${shippingAddress.country}) in different countries`
+        )
       }
 
       // Very different states (for same country)
-      if (billingAddress.country === shippingAddress.country && 
-          billingAddress.country === 'India' &&
-          billingAddress.state !== shippingAddress.state) {
+      if (
+        billingAddress.country === shippingAddress.country &&
+        billingAddress.country === 'India' &&
+        billingAddress.state !== shippingAddress.state
+      ) {
         // Check if states are far apart (basic check)
         const distantStates = ['Kashmir', 'Kerala', 'Tamil Nadu', 'West Bengal']
-        if (distantStates.includes(billingAddress.state) && 
-            distantStates.includes(shippingAddress.state) &&
-            billingAddress.state !== shippingAddress.state) {
+        if (
+          distantStates.includes(billingAddress.state) &&
+          distantStates.includes(shippingAddress.state) &&
+          billingAddress.state !== shippingAddress.state
+        ) {
           score += 10
           flags.push('DISTANT_ADDRESSES')
           reasons.push('Billing and shipping addresses in distant states')
@@ -301,23 +318,24 @@ async function checkGeographicAnomalies(context: PaymentContext): Promise<{
         eq(orders.email, context.email),
         gte(orders.createdAt, sql`NOW() - INTERVAL '90 days'`)
       ),
-      limit: 20
+      limit: 20,
     })
 
     if (recentOrders.length > 0) {
       const historicalCountries = new Set(
-        recentOrders.map(o => o.shippingAddress?.country).filter(Boolean)
+        recentOrders.map((o) => o.shippingAddress?.country).filter(Boolean)
       )
 
       // Shipping to new country
-      if (shippingAddress?.country && 
-          !historicalCountries.has(shippingAddress.country)) {
+      if (
+        shippingAddress?.country &&
+        !historicalCountries.has(shippingAddress.country)
+      ) {
         score += 10
         flags.push('NEW_SHIPPING_COUNTRY')
         reasons.push(`First time shipping to ${shippingAddress.country}`)
       }
     }
-
   } catch (error) {
     console.error('Error in geographic check:', error)
   }
@@ -340,13 +358,16 @@ async function checkIdentityAnomalies(context: PaymentContext): Promise<{
   try {
     // Suspicious email patterns
     const email = context.email.toLowerCase()
-    
+
     // Temporary/disposable email domains
     const disposableEmailDomains = [
-      'tempmail.org', '10minutemail.com', 'guerrillamail.com', 
-      'mailinator.com', 'throwaway.email'
+      'tempmail.org',
+      '10minutemail.com',
+      'guerrillamail.com',
+      'mailinator.com',
+      'throwaway.email',
     ]
-    
+
     const emailDomain = email.split('@')[1]
     if (disposableEmailDomains.includes(emailDomain)) {
       score += 20
@@ -362,7 +383,10 @@ async function checkIdentityAnomalies(context: PaymentContext): Promise<{
     }
 
     // Check for multiple orders with different emails but similar patterns
-    const emailBase = email.split('@')[0].replace(/[0-9]+$/, '').replace(/[._-]/g, '')
+    const emailBase = email
+      .split('@')[0]
+      .replace(/[0-9]+$/, '')
+      .replace(/[._-]/g, '')
     if (emailBase.length < 5) {
       score += 10
       flags.push('SHORT_EMAIL_PREFIX')
@@ -380,12 +404,14 @@ async function checkIdentityAnomalies(context: PaymentContext): Promise<{
         )
       `,
       limit: 10,
-      orderBy: desc(payments.createdAt)
+      orderBy: desc(payments.createdAt),
     })
 
     if (recentPayments.length > 0) {
-      const paymentMethods = new Set(recentPayments.map(p => p.paymentMethod))
-      const cardBrands = new Set(recentPayments.map(p => p.cardBrand).filter(Boolean))
+      const paymentMethods = new Set(recentPayments.map((p) => p.paymentMethod))
+      const cardBrands = new Set(
+        recentPayments.map((p) => p.cardBrand).filter(Boolean)
+      )
 
       // Multiple payment methods
       if (paymentMethods.size > 3) {
@@ -401,7 +427,6 @@ async function checkIdentityAnomalies(context: PaymentContext): Promise<{
         reasons.push(`Used ${cardBrands.size} different card brands`)
       }
     }
-
   } catch (error) {
     console.error('Error in identity check:', error)
   }
@@ -425,20 +450,24 @@ async function checkDeviceAnomalies(context: PaymentContext): Promise<{
     if (context.userAgent) {
       // Suspicious user agents
       const userAgent = context.userAgent.toLowerCase()
-      
+
       // Headless browsers
-      if (userAgent.includes('headless') || 
-          userAgent.includes('phantom') || 
-          userAgent.includes('selenium')) {
+      if (
+        userAgent.includes('headless') ||
+        userAgent.includes('phantom') ||
+        userAgent.includes('selenium')
+      ) {
         score += 25
         flags.push('HEADLESS_BROWSER')
         reasons.push('Using headless browser')
       }
 
       // Bot indicators
-      if (userAgent.includes('bot') || 
-          userAgent.includes('crawler') || 
-          userAgent.includes('spider')) {
+      if (
+        userAgent.includes('bot') ||
+        userAgent.includes('crawler') ||
+        userAgent.includes('spider')
+      ) {
         score += 20
         flags.push('BOT_USER_AGENT')
         reasons.push('Bot-like user agent')
@@ -462,9 +491,11 @@ async function checkDeviceAnomalies(context: PaymentContext): Promise<{
     // IP address checks
     if (context.ipAddress) {
       // Check for known proxy/VPN ranges (basic check)
-      if (context.ipAddress.startsWith('10.') || 
-          context.ipAddress.startsWith('192.168.') ||
-          context.ipAddress.startsWith('172.')) {
+      if (
+        context.ipAddress.startsWith('10.') ||
+        context.ipAddress.startsWith('192.168.') ||
+        context.ipAddress.startsWith('172.')
+      ) {
         // Private IP ranges - could be behind proxy
         score += 5
         flags.push('PRIVATE_IP')
@@ -477,12 +508,12 @@ async function checkDeviceAnomalies(context: PaymentContext): Promise<{
           eq(orders.email, context.email),
           gte(orders.createdAt, sql`NOW() - INTERVAL '7 days'`)
         ),
-        limit: 10
+        limit: 10,
       })
 
       if (recentOrders.length > 0) {
         const recentIPs = new Set(
-          recentOrders.map(o => o.ipAddress).filter(Boolean)
+          recentOrders.map((o) => o.ipAddress).filter(Boolean)
         )
 
         if (!recentIPs.has(context.ipAddress) && recentIPs.size > 0) {
@@ -499,7 +530,6 @@ async function checkDeviceAnomalies(context: PaymentContext): Promise<{
         }
       }
     }
-
   } catch (error) {
     console.error('Error in device check:', error)
   }
@@ -532,7 +562,7 @@ async function checkPatternAnomalies(context: PaymentContext): Promise<{
         `,
         eq(payments.status, 'failed'),
         gte(payments.createdAt, sql`NOW() - INTERVAL '24 hours'`)
-      )
+      ),
     })
 
     if (recentFailedPayments.length > 5) {
@@ -557,7 +587,7 @@ async function checkPatternAnomalies(context: PaymentContext): Promise<{
         `,
         eq(payments.status, 'refunded'),
         gte(payments.createdAt, sql`NOW() - INTERVAL '30 days'`)
-      )
+      ),
     })
 
     if (recentRefunds.length > 2) {
@@ -565,7 +595,6 @@ async function checkPatternAnomalies(context: PaymentContext): Promise<{
       flags.push('MULTIPLE_REFUNDS')
       reasons.push(`${recentRefunds.length} refunds in last 30 days`)
     }
-
   } catch (error) {
     console.error('Error in pattern check:', error)
   }
@@ -595,18 +624,18 @@ function generateRecommendations(level: string, flags: string[]): string[] {
       recommendations.push('Contact customer for verification')
       recommendations.push('Verify identity documents')
       break
-    
+
     case 'high':
       recommendations.push('Hold payment for manual review')
       recommendations.push('Require additional verification')
       recommendations.push('Contact customer')
       break
-    
+
     case 'medium':
       recommendations.push('Monitor payment closely')
       recommendations.push('Consider additional verification')
       break
-    
+
     case 'low':
       recommendations.push('Process normally with standard monitoring')
       break
@@ -616,15 +645,15 @@ function generateRecommendations(level: string, flags: string[]): string[] {
   if (flags.includes('HIGH_VELOCITY_HOUR')) {
     recommendations.push('Implement velocity limits')
   }
-  
+
   if (flags.includes('DISPOSABLE_EMAIL')) {
     recommendations.push('Require phone verification')
   }
-  
+
   if (flags.includes('CARD_TESTING')) {
     recommendations.push('Implement CAPTCHA')
   }
-  
+
   if (flags.includes('HEADLESS_BROWSER')) {
     recommendations.push('Implement bot detection')
   }
@@ -658,10 +687,10 @@ export async function logRiskAnalysis(data: {
         fraud_level: data.riskLevel,
         flags: data.factors,
         recommendation: data.recommendation,
-        order_id: data.orderId
+        order_id: data.orderId,
       },
       ipAddress: data.ip,
-      userAgent: data.userAgent
+      userAgent: data.userAgent,
     })
   } catch (error) {
     console.error('Error logging fraud analysis:', error)
@@ -669,7 +698,7 @@ export async function logRiskAnalysis(data: {
 }
 
 async function logFraudAnalysis(
-  context: PaymentContext, 
+  context: PaymentContext,
   result: FraudRisk
 ): Promise<void> {
   try {
@@ -685,10 +714,10 @@ async function logFraudAnalysis(
         flags: result.flags,
         email: context.email,
         amount: context.amount,
-        ip_address: context.ipAddress
+        ip_address: context.ipAddress,
       },
       ipAddress: context.ipAddress,
-      userAgent: context.userAgent
+      userAgent: context.userAgent,
     })
   } catch (error) {
     console.error('Error logging fraud analysis:', error)
@@ -709,7 +738,7 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
 }> {
   try {
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
-    
+
     // Get recent fraud analyses from audit logs
     const analyses = await db.query.auditLogs.findMany({
       where: and(
@@ -717,7 +746,7 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
         gte(auditLogs.timestamp, cutoff)
       ),
       orderBy: [desc(auditLogs.timestamp)],
-      limit: 1000
+      limit: 1000,
     })
 
     let totalAnalyses = analyses.length
@@ -731,15 +760,15 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
       const changes = analysis.changes as any
       const riskScore = changes?.fraud_score || 0
       const riskLevel = changes?.fraud_level || 'low'
-      
+
       totalRiskScore += riskScore
-      
+
       if (riskScore >= 70) {
         fraudBlocked++
       } else if (riskScore >= 60) {
         fraudDetected++
       }
-      
+
       if (riskLevel === 'high' || riskLevel === 'critical') {
         highRiskCount++
       }
@@ -751,7 +780,7 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
         riskLevel,
         factors: changes?.flags || [],
         action: riskScore >= 70 ? 'block' : 'flag',
-        ip: analysis.ipAddress
+        ip: analysis.ipAddress,
       })
     }
 
@@ -759,12 +788,14 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
       totalAnalyses,
       fraudDetected,
       fraudBlocked,
-      averageRiskScore: totalAnalyses > 0 ? Math.round(totalRiskScore / totalAnalyses * 100) / 100 : 0,
+      averageRiskScore:
+        totalAnalyses > 0
+          ? Math.round((totalRiskScore / totalAnalyses) * 100) / 100
+          : 0,
       highRiskCount,
       patterns: [], // Could be enhanced with pattern analysis
-      events: events.slice(0, 50) // Return recent 50 events
+      events: events.slice(0, 50), // Return recent 50 events
     }
-
   } catch (error) {
     console.error('Error getting fraud analytics:', error)
     return {
@@ -774,7 +805,7 @@ export async function getFraudAnalytics(hours: number = 24): Promise<{
       averageRiskScore: 0,
       highRiskCount: 0,
       patterns: [],
-      events: []
+      events: [],
     }
   }
 }
