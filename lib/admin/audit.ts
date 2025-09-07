@@ -2,7 +2,7 @@ import { db } from '@/db'
 import { auditLogs, auditLogBulkOperations, userSessions } from '@/db/schema/audit'
 import { eq } from 'drizzle-orm'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/lib/auth-options'
 import { headers } from 'next/headers'
 import { createId } from '@paralleldrive/cuid2'
 

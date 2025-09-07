@@ -8,7 +8,7 @@ import { eq, and, sql } from 'drizzle-orm'
 import { createId } from '@paralleldrive/cuid2'
 import { getPaymentDetails, getOrderDetails } from '@/lib/razorpay'
 import { checkIdempotency, saveIdempotencyResult, generateWebhookIdempotencyKey } from '@/lib/idempotency'
-import { logAdminAction } from '@/lib/admin/audit'
+import { auditActions } from '@/lib/admin/audit'
 import { revalidatePath } from 'next/cache'
 
 export interface WebhookPayload {
@@ -220,7 +220,7 @@ async function handlePaymentCaptured(payload: WebhookPayload): Promise<WebhookPr
       }
 
       // Log the action
-      await logAdminAction({
+      await auditActions.log({
         userId: 'system',
         action: 'PAYMENT_CAPTURED',
         resourceType: 'payment',
@@ -316,7 +316,7 @@ async function handlePaymentAuthorized(payload: WebhookPayload): Promise<Webhook
         .where(eq(orders.id, payment.orderId))
 
       // Log the action
-      await logAdminAction({
+      await auditActions.log({
         userId: 'system',
         action: 'PAYMENT_AUTHORIZED',
         resourceType: 'payment',
@@ -421,7 +421,7 @@ async function handlePaymentFailed(payload: WebhookPayload): Promise<WebhookProc
       }
 
       // Log the action
-      await logAdminAction({
+      await auditActions.log({
         userId: 'system',
         action: 'PAYMENT_FAILED',
         resourceType: 'payment',

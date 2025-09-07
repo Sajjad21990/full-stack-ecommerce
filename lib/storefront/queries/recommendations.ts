@@ -1,7 +1,7 @@
 import { db } from '@/db'
 import { eq, and, inArray, sql, desc, ne, or } from 'drizzle-orm'
-import { products, productVariants, productCollections, productCategories } from '@/db/schema/products'
-import { collections, categories } from '@/db/schema/collections'
+import { products, productVariants } from '@/db/schema/products'
+import { collections, categories, productCollections, productCategories } from '@/db/schema/collections'
 import { cache } from 'react'
 
 export interface RecommendationOptions {

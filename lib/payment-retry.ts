@@ -5,7 +5,7 @@ import { orders, payments } from '@/db/schema/orders'
 import { eq, and, lt, sql } from 'drizzle-orm'
 import { createRazorpayOrder, getPaymentDetails } from '@/lib/razorpay'
 import { createId } from '@paralleldrive/cuid2'
-import { logAdminAction } from '@/lib/admin/audit'
+import { auditActions } from '@/lib/admin/audit'
 
 interface PaymentRetryOptions {
   maxRetries?: number
@@ -88,7 +88,7 @@ export async function retryFailedPayments(
           retriesProcessed++
           
           // Log successful retry creation
-          await logAdminAction({
+          await auditActions.log({
             userId: 'system',
             action: 'PAYMENT_RETRY_CREATED',
             resourceType: 'payment',
@@ -286,7 +286,7 @@ export async function syncPaymentStatus(paymentId: string): Promise<{
           updated = true
 
           // Log the sync
-          await logAdminAction({
+          await auditActions.log({
             userId: 'system',
             action: 'PAYMENT_STATUS_SYNCED',
             resourceType: 'payment',

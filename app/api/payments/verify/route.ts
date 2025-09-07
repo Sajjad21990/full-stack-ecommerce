@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { orders, payments } from '@/db/schema/orders'
-import { inventory } from '@/db/schema/inventory'
+import { stockLevels } from '@/db/schema/inventory'
 import { eq, and } from 'drizzle-orm'
 import { verifyPaymentSignature, getPaymentDetails } from '@/lib/razorpay'
 import { revalidatePath } from 'next/cache'
 import { checkRateLimit, getClientIdentifier, logRateLimitViolation } from '@/lib/rate-limit'
-import { analyzePaymentRisk, logRiskAnalysis } from '@/lib/fraud-detection'
+import { analyzePaymentFraud as analyzePaymentRisk, logRiskAnalysis } from '@/lib/fraud-detection'
 import { checkIdempotency, saveIdempotencyResult } from '@/lib/idempotency'
 import { SecurityEvents, createAuditTrail } from '@/lib/security-logger'
 
@@ -272,15 +272,15 @@ export async function POST(request: NextRequest) {
         for (const item of payment.order.items) {
           if (item.variantId) {
             // Decrement available quantity and increment reserved quantity
-            await tx.update(inventory)
+            await tx.update(stockLevels)
               .set({
-                availableQuantity: inventory.availableQuantity - item.quantity,
-                reservedQuantity: inventory.reservedQuantity + item.quantity,
+                quantity: stockLevels.quantity - item.quantity,
+                reservedQuantity: stockLevels.reservedQuantity + item.quantity,
                 updatedAt: new Date()
               })
               .where(and(
-                eq(inventory.productVariantId, item.variantId),
-                eq(inventory.locationId, 'default') // Assuming default location
+                eq(stockLevels.variantId, item.variantId),
+                eq(stockLevels.locationId, 'default') // Assuming default location
               ))
           }
         }
