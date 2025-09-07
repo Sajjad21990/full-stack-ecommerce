@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "drizzle-kit push && tsx scripts/seed-improved.ts && next build",
+    "build": "next build",
     "start": "next start",
+    "railway:start": "bash scripts/railway-startup.sh",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,css}\"",
