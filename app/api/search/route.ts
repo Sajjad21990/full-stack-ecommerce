@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { searchProducts } from '@/lib/storefront/queries/products'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -10,16 +12,20 @@ export async function GET(request: Request) {
 
     // Extract filters
     const filters = {
-      minPrice: searchParams.get('minPrice') ? parseInt(searchParams.get('minPrice')!) : undefined,
-      maxPrice: searchParams.get('maxPrice') ? parseInt(searchParams.get('maxPrice')!) : undefined,
+      minPrice: searchParams.get('minPrice')
+        ? parseInt(searchParams.get('minPrice')!)
+        : undefined,
+      maxPrice: searchParams.get('maxPrice')
+        ? parseInt(searchParams.get('maxPrice')!)
+        : undefined,
       vendor: searchParams.getAll('brand').filter(Boolean),
       productType: searchParams.getAll('category').filter(Boolean),
       inStock: searchParams.get('inStock') === 'true',
-      sortBy: (searchParams.get('sortBy') as any) || 'relevance'
+      sortBy: (searchParams.get('sortBy') as any) || 'relevance',
     }
 
     const result = await searchProducts(query, filters, page, limit)
-    
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Search API error:', error)

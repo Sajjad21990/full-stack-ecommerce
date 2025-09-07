@@ -8,6 +8,8 @@ import { ProductRecommendations } from '@/components/storefront/product/product-
 import { Breadcrumbs } from '@/components/storefront/common/breadcrumbs'
 import { ShoppingCart } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Shopping Cart | Review Your Items',
   description: 'Review and modify items in your shopping cart before checkout.',
@@ -23,7 +25,7 @@ export default async function CartPage() {
       // Get recommendations based on the first item in cart
       const recs = await getProductRecommendations(cart.items[0].productId, {
         limit: 4,
-        type: 'cross_sell'
+        type: 'cross_sell',
       })
       recommendations = recs || []
     } catch (error) {
@@ -31,23 +33,21 @@ export default async function CartPage() {
     }
   }
 
-  const breadcrumbs = [
-    { label: 'Home', href: '/' },
-    { label: 'Shopping Cart' }
-  ]
+  const breadcrumbs = [{ label: 'Home', href: '/' }, { label: 'Shopping Cart' }]
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="border-b bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <Breadcrumbs items={breadcrumbs} />
-          <div className="flex items-center gap-3 mt-4">
-            <ShoppingCart className="w-6 h-6" />
+          <div className="mt-4 flex items-center gap-3">
+            <ShoppingCart className="h-6 w-6" />
             <h1 className="text-2xl font-bold text-gray-900">Shopping Cart</h1>
             {cart && cart.totalQuantity > 0 && (
               <span className="text-sm text-gray-600">
-                ({cart.totalQuantity} {cart.totalQuantity === 1 ? 'item' : 'items'})
+                ({cart.totalQuantity}{' '}
+                {cart.totalQuantity === 1 ? 'item' : 'items'})
               </span>
             )}
           </div>
@@ -55,25 +55,28 @@ export default async function CartPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {!cart || cart.items.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShoppingCart className="w-10 h-10 text-gray-400" />
+          <div className="py-16 text-center">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
+              <ShoppingCart className="h-10 w-10 text-gray-400" />
             </div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Your cart is empty</h2>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Looks like you haven't added anything to your cart yet. Start shopping to fill it up!
+            <h2 className="mb-4 text-2xl font-semibold text-gray-900">
+              Your cart is empty
+            </h2>
+            <p className="mx-auto mb-8 max-w-md text-gray-600">
+              Looks like you haven&apos;t added anything to your cart yet. Start
+              shopping to fill it up!
             </p>
             <a
               href="/"
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-blue-700"
             >
               Continue Shopping
             </a>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             {/* Cart Items */}
             <div className="lg:col-span-2">
               <CartItems cart={cart} />
@@ -91,7 +94,7 @@ export default async function CartPage() {
         {/* Recommendations */}
         {recommendations.length > 0 && (
           <div className="mt-16">
-            <ProductRecommendations 
+            <ProductRecommendations
               products={recommendations}
               title="You might also like"
               subtitle="Based on items in your cart"

@@ -78,3 +78,6 @@ When ready for production:
 - **Build fails**: Check Node version, ensure all deps in package.json
 - **DB connection fails**: Railway auto-injects DATABASE_URL, don't override
 - **Redis errors**: Ensure REDIS_URL uses Railway's injected variable
+
+redis://default:FPAbPFcRUsDLxkYoHHCxmwQbSNewwoGl@redis.railway.internal:6379
+postgresql://postgres:hNEFyBwgqvkZCgvcysWhFrZzxIzLsIKq@postgres.railway.internal:5432/railway

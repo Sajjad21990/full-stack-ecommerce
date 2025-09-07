@@ -4,6 +4,8 @@ import { getCart } from '@/lib/storefront/actions/cart'
 import { CheckoutClient } from '@/components/storefront/checkout/checkout-client'
 import { Breadcrumbs } from '@/components/storefront/common/breadcrumbs'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Checkout | Complete Your Order',
   description: 'Review your order and complete your purchase securely.',
@@ -20,16 +22,16 @@ export default async function CheckoutPage() {
   const breadcrumbs = [
     { label: 'Home', href: '/' },
     { label: 'Cart', href: '/cart' },
-    { label: 'Checkout' }
+    { label: 'Checkout' },
   ]
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="border-b bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <Breadcrumbs items={breadcrumbs} />
-          <h1 className="text-2xl font-bold text-gray-900 mt-4">Checkout</h1>
+          <h1 className="mt-4 text-2xl font-bold text-gray-900">Checkout</h1>
         </div>
       </div>
 
