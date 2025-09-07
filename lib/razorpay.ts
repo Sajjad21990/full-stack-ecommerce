@@ -1,5 +1,3 @@
-'use server'
-
 import Razorpay from 'razorpay'
 import { createId } from '@paralleldrive/cuid2'
 
