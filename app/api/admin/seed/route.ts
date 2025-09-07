@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
+  // Set a timeout for the entire operation
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(
+      () => reject(new Error('Seeding operation timed out after 5 minutes')),
+      300000
+    )
+  })
+
   try {
     // Simple security check - only allow in development or with a secret key
     const authHeader = request.headers.get('authorization')
