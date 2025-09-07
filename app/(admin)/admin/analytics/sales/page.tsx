@@ -61,7 +61,12 @@ export default async function SalesReportsPage({ searchParams }: PageProps) {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Suspense fallback={<div>Loading sales chart...</div>}>
-            <SalesChart data={analytics.salesByPeriod} />
+            <SalesChart data={analytics.salesByPeriod.map(item => ({
+              date: item.date,
+              sales: item.totalSales,
+              orders: item.totalOrders,
+              customers: 0 // We don't track customers per day yet
+            }))} />
           </Suspense>
 
           {analytics.salesByHour.length > 0 && (
@@ -73,9 +78,9 @@ export default async function SalesReportsPage({ searchParams }: PageProps) {
                 <div className="space-y-2">
                   {Array.from({ length: 24 }, (_, hour) => {
                     const hourData = analytics.salesByHour.find(h => h.hour === hour)
-                    const sales = hourData?.sales || 0
-                    const orders = hourData?.orders || 0
-                    const maxHourlySales = Math.max(...analytics.salesByHour.map(h => h.sales))
+                    const sales = hourData?.totalSales || 0
+                    const orders = hourData?.totalOrders || 0
+                    const maxHourlySales = Math.max(...analytics.salesByHour.map(h => h.totalSales || 0))
                     
                     return (
                       <div key={hour} className="flex items-center gap-3">

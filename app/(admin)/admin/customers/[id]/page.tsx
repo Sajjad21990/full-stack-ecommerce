@@ -51,18 +51,9 @@ export default async function CustomerDetailsPage({ params }: PageProps) {
           </Link>
           <div className="flex items-center gap-4">
             <div className="relative h-16 w-16 rounded-full overflow-hidden bg-gray-100">
-              {customer.image ? (
-                <Image
-                  src={customer.image}
-                  alt={customer.name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 text-2xl font-medium">
-                  {customer.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-              )}
+              <div className="flex items-center justify-center h-full text-gray-400 text-2xl font-medium">
+                {customer.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
             </div>
             <div>
               <div className="flex items-center gap-3">

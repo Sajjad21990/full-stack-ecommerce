@@ -36,7 +36,7 @@ async function MediaUploadWrapper() {
   
   return (
     <MediaUpload 
-      folders={folders}
+      folders={folders.filter(f => f !== null) as string[]}
       maxFiles={20}
       acceptedTypes={[
         'image/jpeg',

@@ -141,7 +141,7 @@ async function MediaFiltersWrapper() {
     getMediaTags()
   ])
   
-  return <MediaFilters folders={folders} tags={tags} />
+  return <MediaFilters folders={folders.filter(f => f !== null) as string[]} tags={tags} />
 }
 
 async function MediaLibraryWrapper({ searchParams }: { searchParams: MediaPageProps['searchParams'] }) {

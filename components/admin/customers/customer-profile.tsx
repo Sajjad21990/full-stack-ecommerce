@@ -28,7 +28,6 @@ export default function CustomerProfile({ customer }: CustomerProfileProps) {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={customer.image} />
                 <AvatarFallback>
                   {customer.name?.charAt(0) || customer.email?.charAt(0)?.toUpperCase()}
                 </AvatarFallback>

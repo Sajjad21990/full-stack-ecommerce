@@ -68,7 +68,14 @@ export default async function DiscountsPage({ searchParams }: PageProps) {
       </div>
 
       <Suspense fallback={<div>Loading stats...</div>}>
-        <DiscountStats stats={stats} />
+        <DiscountStats stats={{
+          ...stats,
+          topDiscounts: stats.topDiscounts.map(d => ({
+            ...d,
+            code: d.code || '',
+            title: d.title || ''
+          }))
+        }} />
       </Suspense>
 
       <Card>

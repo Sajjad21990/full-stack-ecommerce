@@ -66,7 +66,7 @@ async function AuditFiltersWrapper() {
     getAuditResourceTypes()
   ])
   
-  return <AuditFilters actionTypes={actionTypes} resourceTypes={resourceTypes} />
+  return <AuditFilters filters={{ actionTypes, resourceTypes }} />
 }
 
 async function AuditLogsWrapper({ searchParams }: { searchParams: AuditPageProps['searchParams'] }) {
@@ -90,7 +90,6 @@ async function AuditLogsWrapper({ searchParams }: { searchParams: AuditPageProps
     <AuditLogsTable 
       logs={logs}
       pagination={pagination}
-      currentFilters={filters}
     />
   )
 }

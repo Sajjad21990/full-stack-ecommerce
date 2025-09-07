@@ -31,8 +31,8 @@ export default async function EditCollectionPage({ params }: EditCollectionPageP
           handle: collection.handle,
           description: collection.description || '',
           image: collection.image || '',
-          status: collection.status,
-          rulesType: collection.rulesType,
+          status: collection.status as 'active' | 'draft',
+          rulesType: collection.rulesType as 'manual' | 'automated',
           position: collection.position
         }} 
       />

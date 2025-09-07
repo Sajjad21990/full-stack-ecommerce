@@ -127,11 +127,24 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Suspense fallback={<div>Loading sales chart...</div>}>
-          <SalesChart data={analytics.salesByPeriod} />
+          <SalesChart data={analytics.salesByPeriod.map(item => ({
+            date: item.date,
+            sales: item.totalSales,
+            orders: item.totalOrders,
+            customers: 0 // We don't track customers per day yet
+          }))} />
         </Suspense>
 
         <Suspense fallback={<div>Loading products chart...</div>}>
-          <TopProductsChart data={analytics.topProducts} />
+          <TopProductsChart data={analytics.topProducts.map(item => ({
+            productId: item.productId,
+            productName: item.productTitle,
+            variantId: undefined,
+            variantName: undefined,
+            totalQuantity: item.totalQuantity,
+            totalSales: item.totalRevenue,
+            orderCount: item.totalOrders
+          }))} />
         </Suspense>
       </div>
 

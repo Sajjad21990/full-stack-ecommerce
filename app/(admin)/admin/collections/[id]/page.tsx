@@ -138,8 +138,11 @@ export default async function CollectionDetailPage({ params }: CollectionDetailP
             </CardHeader>
             <CardContent>
               <ProductsInCollection 
-                collection={collection}
-                products={collection.productCollections || []}
+                collection={{ 
+                  id: collection.id, 
+                  rulesType: (collection.rulesType || 'manual') as 'manual' | 'automated' 
+                }}
+                products={(collection.productCollections || []) as any}
               />
             </CardContent>
           </Card>

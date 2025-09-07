@@ -8,16 +8,18 @@ import { checkRateLimit, getClientIdentifier, logRateLimitViolation } from '@/li
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+    
     // Apply rate limiting
     const clientId = getClientIdentifier(request)
     const rateLimitResult = await checkRateLimit('orderCreation', clientId, request)
     
     if (rateLimitResult.blocked) {
       await logRateLimitViolation('order_payment_creation', clientId, request, {
-        order_id: params.id,
+        order_id: id,
         action: 'payment_order_creation',
         remaining: rateLimitResult.remaining,
         reset: rateLimitResult.reset
