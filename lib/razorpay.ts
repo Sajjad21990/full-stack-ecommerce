@@ -5,15 +5,16 @@ import { createId } from '@paralleldrive/cuid2'
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
 
-if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-  throw new Error('Missing Razorpay configuration. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
-}
+// Make Razorpay optional - only throw error when actually trying to use it
+const isRazorpayConfigured = !!(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET)
 
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: RAZORPAY_KEY_ID,
-  key_secret: RAZORPAY_KEY_SECRET,
-})
+// Initialize Razorpay instance only if configured
+const razorpay = isRazorpayConfigured 
+  ? new Razorpay({
+      key_id: RAZORPAY_KEY_ID!,
+      key_secret: RAZORPAY_KEY_SECRET!,
+    })
+  : null
 
 // Types
 export interface RazorpayOrderOptions {
@@ -49,6 +50,10 @@ export interface PaymentVerificationData {
  * Create a Razorpay order
  */
 export async function createRazorpayOrder(options: RazorpayOrderOptions): Promise<RazorpayOrder> {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const orderOptions: Razorpay.IRazorpayOrderCreateOptions = {
       amount: options.amount,
@@ -89,6 +94,10 @@ export function verifyPaymentSignature(data: PaymentVerificationData): boolean {
  * Fetch payment details
  */
 export async function getPaymentDetails(paymentId: string) {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const payment = await razorpay.payments.fetch(paymentId)
     return payment
@@ -102,6 +111,10 @@ export async function getPaymentDetails(paymentId: string) {
  * Capture payment (for authorized payments)
  */
 export async function capturePayment(paymentId: string, amount: number, currency = 'INR') {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const capture = await razorpay.payments.capture(paymentId, amount, currency)
     return capture
@@ -119,6 +132,10 @@ export async function createRefund(
   amount?: number, 
   notes?: Record<string, string>
 ) {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const refundData: any = {
       payment_id: paymentId,
@@ -144,6 +161,10 @@ export async function createRefund(
  * Fetch order details
  */
 export async function getOrderDetails(orderId: string) {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const order = await razorpay.orders.fetch(orderId)
     return order
@@ -157,6 +178,10 @@ export async function getOrderDetails(orderId: string) {
  * Get order payments
  */
 export async function getOrderPayments(orderId: string) {
+  if (!razorpay) {
+    throw new Error('Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.')
+  }
+  
   try {
     const payments = await razorpay.orders.fetchPayments(orderId)
     return payments
@@ -199,8 +224,12 @@ export function validateWebhookSignature(
  * Get Razorpay configuration for client-side
  */
 export function getRazorpayConfig() {
+  if (!isRazorpayConfigured) {
+    return null
+  }
+  
   return {
-    key_id: RAZORPAY_KEY_ID,
+    key_id: RAZORPAY_KEY_ID!,
     // Never expose key_secret to client
   }
 }

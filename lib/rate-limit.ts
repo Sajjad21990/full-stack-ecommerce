@@ -2,63 +2,71 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { NextRequest } from 'next/server'
 
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL || 'redis://localhost:6379',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-})
+// Check if Upstash Redis is configured
+const isUpstashConfigured = !!(
+  process.env.UPSTASH_REDIS_REST_URL && 
+  process.env.UPSTASH_REDIS_REST_TOKEN
+)
+
+// Initialize Redis client only if Upstash is configured
+const redis = isUpstashConfigured
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+  : null
 
 // Different rate limit configurations for different endpoints
-export const rateLimits = {
+export const rateLimits = redis ? {
   // Payment endpoints - strict limits
   payment: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(5, '1 m'), // 5 requests per minute
     analytics: true,
   }),
 
   // Webhook endpoints - allow bursts but limit over time
   webhook: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(100, '1 m'), // 100 requests per minute
     analytics: true,
   }),
 
   // Order creation - moderate limits
   orderCreation: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 orders per minute
     analytics: true,
   }),
 
   // Cart operations - lenient limits
   cart: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(60, '1 m'), // 60 cart operations per minute
     analytics: true,
   }),
 
   // Admin API - per user limits
   admin: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(200, '1 m'), // 200 admin requests per minute
     analytics: true,
   }),
 
   // General API - default limits
   api: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(100, '1 m'), // 100 requests per minute
     analytics: true,
   }),
 
   // Authentication endpoints
   auth: new Ratelimit({
-    redis,
+    redis: redis!,
     limiter: Ratelimit.slidingWindow(10, '5 m'), // 10 auth attempts per 5 minutes
     analytics: true,
   })
-}
+} : {}
 
 export interface RateLimitResult {
   success: boolean
@@ -72,12 +80,23 @@ export interface RateLimitResult {
  * Apply rate limiting based on endpoint type and identifier
  */
 export async function checkRateLimit(
-  type: keyof typeof rateLimits,
+  type: string,
   identifier: string,
   request?: NextRequest
 ): Promise<RateLimitResult> {
+  // If rate limiting is not configured, allow all requests
+  if (!redis) {
+    return {
+      success: true,
+      remaining: 999,
+      reset: new Date(Date.now() + 60000),
+      limit: 999,
+      blocked: false
+    }
+  }
+  
   try {
-    const ratelimit = rateLimits[type]
+    const ratelimit = (rateLimits as any)[type]
     
     if (!ratelimit) {
       throw new Error(`Unknown rate limit type: ${type}`)
