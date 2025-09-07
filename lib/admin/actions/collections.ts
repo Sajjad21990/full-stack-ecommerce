@@ -1,8 +1,9 @@
 'use server'
 
 import { db } from '@/db'
-import { eq, and, sql, inArray } from 'drizzle-orm'
+import { eq, and, sql, inArray, ilike } from 'drizzle-orm'
 import { collections, categories, productCollections, productCategories } from '@/db/schema/collections'
+import { products } from '@/db/schema/products'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { auditActions } from '@/lib/admin/audit'
@@ -262,6 +263,84 @@ export async function updateCategory(data: UpdateCategoryData) {
   } catch (error) {
     console.error('Error updating category:', error)
     return { success: false, error: 'Failed to update category' }
+  }
+}
+
+/**
+ * Get products not in collection (server action for client components)
+ */
+export async function getProductsNotInCollection(collectionId: string, search?: string) {
+  try {
+    let query = db
+      .select({
+        id: products.id,
+        title: products.title,
+        handle: products.handle,
+        status: products.status,
+        price: products.price
+      })
+      .from(products)
+      .where(
+        and(
+          sql`${products.id} NOT IN (
+            SELECT product_id 
+            FROM product_collections 
+            WHERE collection_id = ${collectionId}
+          )`,
+          eq(products.status, 'active')
+        )
+      )
+
+    if (search) {
+      query = query.where(ilike(products.title, `%${search}%`))
+    }
+
+    return await query.limit(20)
+  } catch (error) {
+    console.error('Error fetching products not in collection:', error)
+    return []
+  }
+}
+
+/**
+ * Check if collection handle is available
+ */
+export async function isCollectionHandleAvailable(handle: string, excludeId?: string) {
+  try {
+    const existing = await db.select({ id: collections.id })
+      .from(collections)
+      .where(eq(collections.handle, handle))
+      .limit(1)
+
+    if (excludeId && existing.length > 0) {
+      return existing[0].id === excludeId
+    }
+
+    return existing.length === 0
+  } catch (error) {
+    console.error('Error checking collection handle availability:', error)
+    return false
+  }
+}
+
+/**
+ * Check if category handle is available
+ */
+export async function isCategoryHandleAvailable(handle: string, excludeId?: string) {
+  try {
+    const existing = await db.select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.handle, handle))
+      .limit(1)
+
+    if (excludeId && existing.length > 0) {
+      return existing[0].id === excludeId
+    }
+
+    return existing.length === 0
+  } catch (error) {
+    console.error('Error checking category handle availability:', error)
+    return false
   }
 }
 

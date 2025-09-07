@@ -110,3 +110,81 @@ export function Pagination({ currentPage, totalPages, onPageChange, className }:
     </div>
   )
 }
+
+// Additional exports for compatibility with shadcn/ui pattern
+export const PaginationContent = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn("flex items-center space-x-1", className)}>{children}</div>
+)
+
+export const PaginationItem = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={className}>{children}</div>
+)
+
+export const PaginationLink = ({ 
+  children, 
+  isActive, 
+  onClick,
+  className 
+}: { 
+  children: React.ReactNode
+  isActive?: boolean
+  onClick?: () => void
+  className?: string 
+}) => (
+  <Button
+    variant={isActive ? "default" : "outline"}
+    size="sm"
+    onClick={onClick}
+    className={cn("w-9 h-9 p-0", className)}
+  >
+    {children}
+  </Button>
+)
+
+export const PaginationPrevious = ({ 
+  onClick,
+  disabled,
+  className 
+}: { 
+  onClick?: () => void
+  disabled?: boolean
+  className?: string 
+}) => (
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={onClick}
+    disabled={disabled}
+    className={cn("gap-1", className)}
+  >
+    <ChevronLeft className="h-4 w-4" />
+    Previous
+  </Button>
+)
+
+export const PaginationNext = ({ 
+  onClick,
+  disabled,
+  className 
+}: { 
+  onClick?: () => void
+  disabled?: boolean
+  className?: string 
+}) => (
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={onClick}
+    disabled={disabled}
+    className={cn("gap-1", className)}
+  >
+    Next
+    <ChevronRight className="h-4 w-4" />
+  </Button>
+)
+
+export const PaginationEllipsis = ({ className }: { className?: string }) => (
+  <div className={cn("flex items-center justify-center w-9 h-9", className)}>
+    <MoreHorizontal className="h-4 w-4" />
+  </div>
+)
