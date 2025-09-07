@@ -1,15 +1,17 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function AuthError() {
+function AuthErrorContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
 
   const errorMessages: Record<string, string> = {
     Configuration: 'There is a problem with the server configuration.',
     AccessDenied: 'You do not have permission to sign in.',
-    Verification: 'The verification token has expired or has already been used.',
+    Verification:
+      'The verification token has expired or has already been used.',
     Default: 'An error occurred during authentication.',
   }
 
@@ -19,7 +21,9 @@ export default function AuthError() {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 px-4 text-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-destructive">Authentication Error</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-destructive">
+            Authentication Error
+          </h2>
           <p className="mt-4 text-sm text-muted-foreground">{message}</p>
         </div>
         <div className="mt-8">
@@ -32,5 +36,19 @@ export default function AuthError() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AuthError() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-center">Loading...</div>
+        </div>
+      }
+    >
+      <AuthErrorContent />
+    </Suspense>
   )
 }
