@@ -15,8 +15,23 @@ export async function POST(request: NextRequest) {
     const { promisify } = require('util')
     const execAsync = promisify(exec)
 
-    console.log('🌱 Starting database seeding via API...')
+    console.log('🌱 Starting database setup and seeding via API...')
 
+    // First, ensure database schema is up to date
+    console.log('📦 Pushing database schema...')
+    const { stdout: pushStdout, stderr: pushStderr } = await execAsync(
+      'npm run db:push',
+      {
+        cwd: process.cwd(),
+        env: process.env,
+      }
+    )
+
+    console.log('DB Push stdout:', pushStdout)
+    if (pushStderr) console.log('DB Push stderr:', pushStderr)
+
+    // Then run the seeding
+    console.log('🌱 Running database seed...')
     const { stdout, stderr } = await execAsync('npm run db:seed-improved', {
       cwd: process.cwd(),
       env: process.env,
@@ -27,8 +42,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Database seeded successfully',
-      logs: stdout,
+      message: 'Database setup and seeded successfully',
+      pushLogs: pushStdout,
+      seedLogs: stdout,
     })
   } catch (error: any) {
     console.error('Seeding failed:', error)
