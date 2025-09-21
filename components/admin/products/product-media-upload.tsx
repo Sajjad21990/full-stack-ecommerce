@@ -2,7 +2,14 @@
 
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, X, Image as ImageIcon, Plus, Loader2 } from 'lucide-react'
+import {
+  Upload,
+  X,
+  Image as ImageIcon,
+  Plus,
+  Loader2,
+  FolderOpen,
+} from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -16,6 +23,7 @@ import {
   uploadProductImage,
   deleteProductImage,
 } from '@/lib/admin/actions/upload-image'
+import { MediaPickerDialog } from '@/components/admin/media/media-picker-dialog'
 import { toast } from 'sonner'
 
 interface ProductMediaUploadProps {
@@ -34,6 +42,7 @@ export function ProductMediaUpload({
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
     {}
   )
+  const [showMediaPicker, setShowMediaPicker] = useState(false)
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -101,115 +110,146 @@ export function ProductMediaUpload({
     onImagesChange(newImages)
   }
 
+  const handleMediaSelect = (selectedUrls: string[]) => {
+    const newImages = [...images, ...selectedUrls].slice(0, maxImages)
+    onImagesChange(newImages)
+    toast.success(`${selectedUrls.length} image(s) added from library`)
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ImageIcon className="h-5 w-5" />
-          Product Images
-        </CardTitle>
-        <CardDescription>
-          Add images to showcase your product. First image will be the main
-          product image.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Existing Images */}
-        {images.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {images.map((image, index) => (
-              <div key={index} className="group relative">
-                <div className="aspect-square overflow-hidden rounded-lg border-2 border-border bg-muted">
-                  <img
-                    src={image}
-                    alt={`Product image ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ImageIcon className="h-5 w-5" />
+            Product Images
+          </CardTitle>
+          <CardDescription>
+            Add images to showcase your product. First image will be the main
+            product image.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Existing Images */}
+          {images.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {images.map((image, index) => (
+                <div key={index} className="group relative">
+                  <div className="aspect-square overflow-hidden rounded-lg border-2 border-border bg-muted">
+                    <img
+                      src={image}
+                      alt={`Product image ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  {/* Main image badge */}
+                  {index === 0 && (
+                    <Badge className="absolute left-2 top-2 text-xs">
+                      Main
+                    </Badge>
+                  )}
+                  {/* Remove button */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="absolute right-2 top-2 h-8 w-8 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                    onClick={() => removeImage(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                {/* Main image badge */}
-                {index === 0 && (
-                  <Badge className="absolute left-2 top-2 text-xs">Main</Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Upload Area */}
+          {images.length < maxImages && (
+            <div
+              {...getRootProps()}
+              className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                isDragActive || dragActive
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+              } `}
+            >
+              <input {...getInputProps()} />
+              <div className="flex flex-col items-center gap-3">
+                {isUploading ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                ) : isDragActive ? (
+                  <Upload className="h-8 w-8 text-primary" />
+                ) : (
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
                 )}
-                {/* Remove button */}
+                <div>
+                  <p className="text-sm font-medium">
+                    {isUploading
+                      ? 'Uploading images...'
+                      : isDragActive
+                        ? 'Drop images here'
+                        : 'Drag & drop images, or click to select'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {isUploading
+                      ? 'Please wait while we upload your images'
+                      : images.length === 0
+                        ? `Upload up to ${maxImages} images (JPG, PNG, GIF, WebP)`
+                        : `Add ${maxImages - images.length} more image${maxImages - images.length !== 1 ? 's' : ''}`}
+                  </p>
+                </div>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
-                  className="absolute right-2 top-2 h-8 w-8 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                  onClick={() => removeImage(index)}
+                  className="mt-2"
+                  disabled={isUploading}
                 >
-                  <X className="h-4 w-4" />
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Choose Images
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setShowMediaPicker(true)}
+                >
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Choose from Library
                 </Button>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Upload Area */}
-        {images.length < maxImages && (
-          <div
-            {...getRootProps()}
-            className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-              isDragActive || dragActive
-                ? 'border-primary bg-primary/5'
-                : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-            } `}
-          >
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center gap-3">
-              {isUploading ? (
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              ) : isDragActive ? (
-                <Upload className="h-8 w-8 text-primary" />
-              ) : (
-                <ImageIcon className="h-8 w-8 text-muted-foreground" />
-              )}
-              <div>
-                <p className="text-sm font-medium">
-                  {isUploading
-                    ? 'Uploading images...'
-                    : isDragActive
-                      ? 'Drop images here'
-                      : 'Drag & drop images, or click to select'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {isUploading
-                    ? 'Please wait while we upload your images'
-                    : images.length === 0
-                      ? `Upload up to ${maxImages} images (JPG, PNG, GIF, WebP)`
-                      : `Add ${maxImages - images.length} more image${maxImages - images.length !== 1 ? 's' : ''}`}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Choose Images
-                  </>
-                )}
-              </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Info */}
-        {images.length > 0 && (
-          <div className="space-y-1 text-xs text-muted-foreground">
-            <p>• First image will be used as the main product image</p>
-            <p>• Recommended size: 1200×1200px or larger</p>
-            <p>• Supported formats: JPG, PNG, GIF, WebP</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {/* Info */}
+          {images.length > 0 && (
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>• First image will be used as the main product image</p>
+              <p>• Recommended size: 1200×1200px or larger</p>
+              <p>• Supported formats: JPG, PNG, GIF, WebP</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Media Picker Dialog */}
+      <MediaPickerDialog
+        open={showMediaPicker}
+        onOpenChange={setShowMediaPicker}
+        onSelect={handleMediaSelect}
+        multiple={true}
+        maxSelections={maxImages - images.length}
+        accept={['image/*']}
+        title="Select Product Images"
+        description="Choose images from your media library to add to this product"
+      />
+    </>
   )
 }

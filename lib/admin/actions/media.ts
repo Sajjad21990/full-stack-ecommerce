@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { mediaAssets, mediaAssociations } from '@/db/schema/media-metadata'
 import { revalidatePath } from 'next/cache'
 import { storage, isFirebaseConfigured } from '@/lib/firebase-admin'
@@ -34,11 +34,11 @@ export interface UpdateMediaData {
 export async function uploadMedia(formData: FormData) {
   try {
     const file = formData.get('file') as File
-    const folder = formData.get('folder') as string || undefined
+    const folder = (formData.get('folder') as string) || undefined
     const tags = formData.get('tags') as string
-    const altText = formData.get('altText') as string || ''
-    const title = formData.get('title') as string || ''
-    const description = formData.get('description') as string || ''
+    const altText = (formData.get('altText') as string) || ''
+    const title = (formData.get('title') as string) || ''
+    const description = (formData.get('description') as string) || ''
 
     if (!file || !file.size) {
       return { success: false, error: 'No file provided' }
@@ -46,9 +46,14 @@ export async function uploadMedia(formData: FormData) {
 
     // Validate file type
     const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
-      'video/mp4', 'video/webm',
-      'application/pdf'
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/svg+xml',
+      'video/mp4',
+      'video/webm',
+      'application/pdf',
     ]
 
     if (!allowedTypes.includes(file.type)) {
@@ -86,27 +91,27 @@ export async function uploadMedia(formData: FormData) {
           metadata: {
             originalName: file.name,
             uploadedAt: new Date().toISOString(),
-            folder: folder || ''
-          }
-        }
+            folder: folder || '',
+          },
+        },
       })
 
       // Get download URL
       const [downloadURL] = await fileRef.getSignedUrl({
         action: 'read',
-        expires: '03-09-2491' // Very far future date for permanent access
+        expires: '03-09-2491', // Very far future date for permanent access
       })
-      
+
       url = downloadURL
     } else {
       // Fallback to local storage
       storageProvider = 'local'
       const uploadDir = join(process.cwd(), 'public', 'uploads', folder || '')
       await mkdir(uploadDir, { recursive: true })
-      
+
       const filePath = join(uploadDir, fileName)
       await writeFile(filePath, buffer)
-      
+
       storagePath = `/uploads/${folder ? folder + '/' : ''}${fileName}`
       url = storagePath
     }
@@ -120,9 +125,9 @@ export async function uploadMedia(formData: FormData) {
 
         // Generate thumbnail
         const thumbnailBuffer = await sharp(buffer)
-          .resize(300, 300, { 
-            fit: 'cover', 
-            position: 'center' 
+          .resize(300, 300, {
+            fit: 'cover',
+            position: 'center',
           })
           .jpeg({ quality: 80 })
           .toBuffer()
@@ -136,22 +141,28 @@ export async function uploadMedia(formData: FormData) {
           const thumbRef = bucket.file(thumbnailPath)
 
           await thumbRef.save(thumbnailBuffer, {
-            metadata: { contentType: 'image/jpeg' }
+            metadata: { contentType: 'image/jpeg' },
           })
 
           const [thumbURL] = await thumbRef.getSignedUrl({
             action: 'read',
-            expires: '03-09-2491'
+            expires: '03-09-2491',
           })
-          
+
           thumbnailUrl = thumbURL
         } else {
-          const thumbDir = join(process.cwd(), 'public', 'uploads', folder || '', 'thumbs')
+          const thumbDir = join(
+            process.cwd(),
+            'public',
+            'uploads',
+            folder || '',
+            'thumbs'
+          )
           await mkdir(thumbDir, { recursive: true })
-          
+
           const thumbPath = join(thumbDir, thumbnailFileName)
           await writeFile(thumbPath, thumbnailBuffer)
-          
+
           thumbnailUrl = `/uploads/${folder ? folder + '/' : ''}thumbs/${thumbnailFileName}`
         }
       } catch (error) {
@@ -160,23 +171,31 @@ export async function uploadMedia(formData: FormData) {
     }
 
     // Save to database
-    const [mediaAsset] = await db.insert(mediaAssets).values({
-      fileName,
-      originalFileName: file.name,
-      mimeType: file.type,
-      size: file.size,
-      url,
-      thumbnailUrl,
-      width,
-      height,
-      altText: altText || file.name,
-      title: title || file.name,
-      description,
-      folder,
-      tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      storageProvider,
-      storagePath
-    }).returning()
+    const [mediaAsset] = await db
+      .insert(mediaAssets)
+      .values({
+        fileName,
+        originalFileName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        url,
+        thumbnailUrl,
+        width,
+        height,
+        altText: altText || file.name,
+        title: title || file.name,
+        description,
+        folder,
+        tags: tags
+          ? tags
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [],
+        storageProvider,
+        storagePath,
+      })
+      .returning()
 
     revalidatePath('/admin/media')
     return { success: true, media: mediaAsset }
@@ -191,14 +210,15 @@ export async function uploadMedia(formData: FormData) {
  */
 export async function updateMedia(data: UpdateMediaData) {
   try {
-    const [updatedMedia] = await db.update(mediaAssets)
+    const [updatedMedia] = await db
+      .update(mediaAssets)
       .set({
         altText: data.altText,
         title: data.title,
         description: data.description,
         folder: data.folder,
         tags: data.tags,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(mediaAssets.id, data.id))
       .returning()
@@ -218,7 +238,7 @@ export async function deleteMedia(id: string) {
   try {
     // Get media asset details
     const mediaAsset = await db.query.mediaAssets.findFirst({
-      where: eq(mediaAssets.id, id)
+      where: eq(mediaAssets.id, id),
     })
 
     if (!mediaAsset) {
@@ -226,13 +246,17 @@ export async function deleteMedia(id: string) {
     }
 
     // Check if media is being used
-    const associations = await db.select()
+    const associations = await db
+      .select()
       .from(mediaAssociations)
       .where(eq(mediaAssociations.mediaAssetId, id))
       .limit(1)
 
     if (associations.length > 0) {
-      return { success: false, error: 'Cannot delete media that is currently in use' }
+      return {
+        success: false,
+        error: 'Cannot delete media that is currently in use',
+      }
     }
 
     // Delete from storage
@@ -240,10 +264,12 @@ export async function deleteMedia(id: string) {
       if (mediaAsset.storageProvider === 'firebase' && isFirebaseConfigured()) {
         const bucket = storage.bucket()
         await bucket.file(mediaAsset.storagePath).delete()
-        
+
         // Delete thumbnail if exists
         if (mediaAsset.thumbnailUrl) {
-          const thumbnailPath = mediaAsset.storagePath.replace('/media/', '/media/thumbs/').replace(/\.[^/.]+$/, '.jpg')
+          const thumbnailPath = mediaAsset.storagePath
+            .replace('/media/', '/media/thumbs/')
+            .replace(/\.[^/.]+$/, '.jpg')
           await bucket.file(thumbnailPath).delete()
         }
       }
@@ -274,21 +300,22 @@ export async function bulkDeleteMedia(ids: string[]) {
 
   try {
     // Check for associations
-    const associations = await db.select()
+    const associations = await db
+      .select()
       .from(mediaAssociations)
-      .where(and(
-        eq(mediaAssociations.mediaAssetId, mediaAssociations.mediaAssetId),
-        // Check if any of the IDs are in use
-        sql`${mediaAssociations.mediaAssetId} = ANY(${ids})`
-      ))
+      .where(sql`${mediaAssociations.mediaAssetId} = ANY(${ids})`)
       .limit(1)
 
     if (associations.length > 0) {
-      return { success: false, error: 'Some media files are currently in use and cannot be deleted' }
+      return {
+        success: false,
+        error: 'Some media files are currently in use and cannot be deleted',
+      }
     }
 
     // Get media assets for storage cleanup
-    const mediaAssets_data = await db.select()
+    const mediaAssets_data = await db
+      .select()
       .from(mediaAssets)
       .where(sql`${mediaAssets.id} = ANY(${ids})`)
 
@@ -298,14 +325,19 @@ export async function bulkDeleteMedia(ids: string[]) {
         if (asset.storageProvider === 'firebase' && isFirebaseConfigured()) {
           const bucket = storage.bucket()
           await bucket.file(asset.storagePath).delete()
-          
+
           if (asset.thumbnailUrl) {
-            const thumbnailPath = asset.storagePath.replace('/media/', '/media/thumbs/').replace(/\.[^/.]+$/, '.jpg')
+            const thumbnailPath = asset.storagePath
+              .replace('/media/', '/media/thumbs/')
+              .replace(/\.[^/.]+$/, '.jpg')
             await bucket.file(thumbnailPath).delete()
           }
         }
       } catch (storageError) {
-        console.warn(`Failed to delete ${asset.fileName} from storage:`, storageError)
+        console.warn(
+          `Failed to delete ${asset.fileName} from storage:`,
+          storageError
+        )
       }
     }
 
@@ -334,29 +366,36 @@ export async function associateMedia(
   try {
     // If this is set as primary, remove primary flag from other associations
     if (isPrimary) {
-      await db.update(mediaAssociations)
+      await db
+        .update(mediaAssociations)
         .set({ isPrimary: false })
-        .where(and(
-          eq(mediaAssociations.entityType, entityType),
-          eq(mediaAssociations.entityId, entityId),
-          eq(mediaAssociations.type, type)
-        ))
+        .where(
+          and(
+            eq(mediaAssociations.entityType, entityType),
+            eq(mediaAssociations.entityId, entityId),
+            eq(mediaAssociations.type, type)
+          )
+        )
     }
 
-    const [association] = await db.insert(mediaAssociations).values({
-      mediaAssetId,
-      entityType,
-      entityId,
-      type,
-      position,
-      isPrimary
-    }).returning()
+    const [association] = await db
+      .insert(mediaAssociations)
+      .values({
+        mediaAssetId,
+        entityType,
+        entityId,
+        type,
+        position,
+        isPrimary,
+      })
+      .returning()
 
     // Update usage count
-    await db.update(mediaAssets)
+    await db
+      .update(mediaAssets)
       .set({
         usageCount: sql`${mediaAssets.usageCount} + 1`,
-        lastUsedAt: new Date()
+        lastUsedAt: new Date(),
       })
       .where(eq(mediaAssets.id, mediaAssetId))
 
@@ -377,18 +416,22 @@ export async function removeMediaAssociation(
   entityId: string
 ) {
   try {
-    await db.delete(mediaAssociations)
-      .where(and(
-        eq(mediaAssociations.mediaAssetId, mediaAssetId),
-        eq(mediaAssociations.entityType, entityType),
-        eq(mediaAssociations.entityId, entityId)
-      ))
+    await db
+      .delete(mediaAssociations)
+      .where(
+        and(
+          eq(mediaAssociations.mediaAssetId, mediaAssetId),
+          eq(mediaAssociations.entityType, entityType),
+          eq(mediaAssociations.entityId, entityId)
+        )
+      )
 
     // Update usage count
-    await db.update(mediaAssets)
+    await db
+      .update(mediaAssets)
       .set({
         usageCount: sql`GREATEST(${mediaAssets.usageCount} - 1, 0)`,
-        lastUsedAt: new Date()
+        lastUsedAt: new Date(),
       })
       .where(eq(mediaAssets.id, mediaAssetId))
 
@@ -406,13 +449,13 @@ export async function removeMediaAssociation(
 export async function createMediaFolder(name: string, parentFolder?: string) {
   try {
     const folderPath = parentFolder ? `${parentFolder}/${name}` : name
-    
+
     // Create folder in storage if using Firebase
     if (isFirebaseConfigured()) {
       const bucket = storage.bucket()
       const folderRef = bucket.file(`media/${folderPath}/.keep`)
       await folderRef.save('', {
-        metadata: { contentType: 'text/plain' }
+        metadata: { contentType: 'text/plain' },
       })
     }
 
