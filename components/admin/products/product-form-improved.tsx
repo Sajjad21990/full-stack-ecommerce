@@ -9,11 +9,28 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   Form,
   FormControl,
@@ -23,10 +40,10 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { 
-  Save, 
-  ArrowLeft, 
-  Package, 
+import {
+  Save,
+  ArrowLeft,
+  Package,
   Tag,
   DollarSign,
   Search,
@@ -36,10 +53,13 @@ import {
   Layers,
   HelpCircle,
   Folder,
-  FolderTree
+  FolderTree,
 } from 'lucide-react'
 import { createProduct, updateProduct } from '@/lib/admin/actions/products'
-import { getCollectionsForSelect, getCategoriesForSelect } from '@/lib/admin/actions/collections-categories'
+import {
+  getCollectionsForSelect,
+  getCategoriesForSelect,
+} from '@/lib/admin/actions/collections-categories'
 import { generateSEO } from '@/lib/admin/actions/generate-seo'
 import { generateHandle } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -51,41 +71,47 @@ import { Checkbox } from '@/components/ui/checkbox'
 const productFormSchema = z.object({
   // Basic Information
   title: z.string().min(1, 'Product title is required').max(255),
-  handle: z.string().min(1, 'Product handle is required').max(255)
-    .regex(/^[a-z0-9-]+$/, 'Handle must contain only lowercase letters, numbers, and hyphens'),
+  handle: z
+    .string()
+    .min(1, 'Product handle is required')
+    .max(255)
+    .regex(
+      /^[a-z0-9-]+$/,
+      'Handle must contain only lowercase letters, numbers, and hyphens'
+    ),
   description: z.string().optional(),
   status: z.enum(['draft', 'active', 'archived']),
-  
+
   // Pricing
   price: z.number().min(0, 'Price must be positive'),
   compareAtPrice: z.number().min(0).optional(),
-  
+
   // Organization
   vendor: z.string().optional(),
   productType: z.string().optional(),
   collectionIds: z.array(z.string()).default([]),
   categoryIds: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
-  
+
   // Media
   images: z.array(z.string()).default([]),
-  
+
   // Inventory
   trackInventory: z.boolean().default(true),
   sku: z.string().optional(),
   barcode: z.string().optional(),
   quantity: z.number().min(0).default(0),
-  
+
   // SEO & Social Media
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   keywords: z.string().optional(),
-  
+
   // Open Graph
   ogTitle: z.string().optional(),
   ogDescription: z.string().optional(),
   ogImage: z.string().optional(),
-  
+
   // Twitter Card
   twitterCard: z.enum(['summary', 'summary_large_image']).optional(),
   twitterTitle: z.string().optional(),
@@ -106,7 +132,20 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
   const [isGeneratingSEO, setIsGeneratingSEO] = useState(false)
   const [collections, setCollections] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
-  
+
+  // Function to generate SKU
+  const generateSKU = (title: string) => {
+    const timestamp = Date.now().toString(36).toUpperCase()
+    const titlePart =
+      title
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join('')
+        .toUpperCase()
+        .slice(0, 3) || 'PRD'
+    return `${titlePart}-${timestamp}`
+  }
+
   // Initialize form
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
@@ -116,15 +155,19 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
       description: product?.description || '',
       status: product?.status || 'draft',
       price: product?.price ? product.price / 100 : 0,
-      compareAtPrice: product?.compareAtPrice ? product.compareAtPrice / 100 : undefined,
+      compareAtPrice: product?.compareAtPrice
+        ? product.compareAtPrice / 100
+        : undefined,
       vendor: product?.vendor || '',
       productType: product?.productType || '',
-      collectionIds: product?.productCollections?.map((pc: any) => pc.collectionId) || [],
-      categoryIds: product?.productCategories?.map((pc: any) => pc.categoryId) || [],
+      collectionIds:
+        product?.productCollections?.map((pc: any) => pc.collectionId) || [],
+      categoryIds:
+        product?.productCategories?.map((pc: any) => pc.categoryId) || [],
       tags: product?.tags || [],
       images: product?.images || [],
       trackInventory: product?.trackInventory ?? true,
-      sku: product?.sku || '',
+      sku: product?.sku || (mode === 'create' ? generateSKU('Product') : ''),
       barcode: product?.barcode || '',
       quantity: product?.quantity || 0,
       seoTitle: product?.seoTitle || '',
@@ -142,28 +185,33 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
 
   // Load collections and categories
   useEffect(() => {
-    Promise.all([
-      getCollectionsForSelect(),
-      getCategoriesForSelect()
-    ]).then(([collectionsData, categoriesData]) => {
-      setCollections(collectionsData)
-      setCategories(categoriesData)
-    })
+    Promise.all([getCollectionsForSelect(), getCategoriesForSelect()]).then(
+      ([collectionsData, categoriesData]) => {
+        setCollections(collectionsData)
+        setCategories(categoriesData)
+      }
+    )
   }, [])
 
-  // Auto-generate handle from title
+  // Auto-generate handle and SKU from title
   const watchTitle = form.watch('title')
   useEffect(() => {
     if (watchTitle && mode === 'create') {
       const generatedHandle = generateHandle(watchTitle)
       form.setValue('handle', generatedHandle)
+
+      // Auto-generate SKU if not manually set
+      const currentSku = form.getValues('sku')
+      if (!currentSku || currentSku.startsWith('PRD-')) {
+        form.setValue('sku', generateSKU(watchTitle))
+      }
     }
   }, [watchTitle, form, mode])
 
   // Generate SEO with AI
   const handleGenerateSEO = async () => {
     console.log('Generate SEO button clicked')
-    
+
     const productData = {
       title: form.getValues('title'),
       description: form.getValues('description'),
@@ -173,35 +221,35 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
       vendor: form.getValues('vendor'),
       productType: form.getValues('productType'),
     }
-    
+
     console.log('Product data for SEO:', productData)
-    
+
     if (!productData.title) {
       toast.error('Please enter a product title first')
       return
     }
-    
+
     setIsGeneratingSEO(true)
-    
+
     try {
       const result = await generateSEO(productData)
       console.log('SEO generation result:', result)
-      
+
       if (result.success && result.data) {
         // Set SEO fields
         form.setValue('seoTitle', result.data.seoTitle)
         form.setValue('seoDescription', result.data.seoDescription)
         form.setValue('keywords', result.data.keywords)
-        
+
         // Set Open Graph fields
         form.setValue('ogTitle', result.data.openGraph.title)
         form.setValue('ogDescription', result.data.openGraph.description)
-        
+
         // Set Twitter Card fields
         form.setValue('twitterCard', result.data.twitter.card as any)
         form.setValue('twitterTitle', result.data.twitter.title)
         form.setValue('twitterDescription', result.data.twitter.description)
-        
+
         toast.success('SEO data generated successfully')
       } else {
         toast.error(result.error || 'Failed to generate SEO data')
@@ -217,7 +265,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
   // Handle form submission
   const onSubmit = async (data: ProductFormData) => {
     setIsSubmitting(true)
-    
+
     try {
       let result
       if (mode === 'create') {
@@ -225,14 +273,11 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
       } else {
         result = await updateProduct(product.id, data as any)
       }
-      
+
       if (result.success) {
         toast.success(result.message)
-        if (mode === 'create' && result.productId) {
-          router.push(`/admin/products/${result.productId}`)
-        } else {
-          router.push('/admin/products')
-        }
+        // Always redirect to products page after successful creation/update
+        router.push('/admin/products')
       } else {
         toast.error(result.error)
       }
@@ -256,11 +301,13 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
               {mode === 'create' ? 'Create Product' : 'Edit Product'}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {mode === 'create' ? 'Add a new product to your catalog' : 'Update product information'}
+              {mode === 'create'
+                ? 'Add a new product to your catalog'
+                : 'Update product information'}
             </p>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>
             Cancel
@@ -286,7 +333,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
             {/* General Tab */}
             <TabsContent value="general" className="space-y-6">
               <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-6">
+                <div className="space-y-6 lg:col-span-2">
                   <Card>
                     <CardHeader>
                       <CardTitle>Basic Information</CardTitle>
@@ -299,13 +346,16 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                           <FormItem>
                             <FormLabel>Product Title</FormLabel>
                             <FormControl>
-                              <Input placeholder="Enter product title" {...field} />
+                              <Input
+                                placeholder="Enter product title"
+                                {...field}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name="handle"
@@ -316,13 +366,14 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                               <Input placeholder="product-handle" {...field} />
                             </FormControl>
                             <FormDescription>
-                              yourstore.com/products/{field.value || 'product-handle'}
+                              yourstore.com/products/
+                              {field.value || 'product-handle'}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name="description"
@@ -356,7 +407,10 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue />
@@ -365,7 +419,9 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                               <SelectContent>
                                 <SelectItem value="draft">Draft</SelectItem>
                                 <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="archived">Archived</SelectItem>
+                                <SelectItem value="archived">
+                                  Archived
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                             <FormDescription>
@@ -426,14 +482,18 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                                 step="0.01"
                                 placeholder="0.00"
                                 {...field}
-                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
                               />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name="compareAtPrice"
@@ -458,7 +518,11 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                                 step="0.01"
                                 placeholder="0.00"
                                 {...field}
-                                onChange={e => field.onChange(parseFloat(e.target.value) || undefined)}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseFloat(e.target.value) || undefined
+                                  )
+                                }
                               />
                             </FormControl>
                             <FormMessage />
@@ -466,25 +530,35 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         )}
                       />
                     </div>
-                    
+
                     {/* Price Preview */}
                     {form.watch('price') > 0 && (
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <p className="text-sm font-medium mb-2">Customer sees:</p>
+                      <div className="rounded-lg bg-muted/50 p-4">
+                        <p className="mb-2 text-sm font-medium">
+                          Customer sees:
+                        </p>
                         <div className="flex items-baseline gap-2">
                           <span className="text-2xl font-bold">
                             ${form.watch('price')?.toFixed(2)}
                           </span>
-                          {form.watch('compareAtPrice') && form.watch('compareAtPrice')! > form.watch('price') && (
-                            <>
-                              <span className="text-lg text-muted-foreground line-through">
-                                ${form.watch('compareAtPrice')?.toFixed(2)}
-                              </span>
-                              <Badge variant="secondary">
-                                {Math.round(((form.watch('compareAtPrice')! - form.watch('price')) / form.watch('compareAtPrice')!) * 100)}% OFF
-                              </Badge>
-                            </>
-                          )}
+                          {form.watch('compareAtPrice') &&
+                            form.watch('compareAtPrice')! >
+                              form.watch('price') && (
+                              <>
+                                <span className="text-lg text-muted-foreground line-through">
+                                  ${form.watch('compareAtPrice')?.toFixed(2)}
+                                </span>
+                                <Badge variant="secondary">
+                                  {Math.round(
+                                    ((form.watch('compareAtPrice')! -
+                                      form.watch('price')) /
+                                      form.watch('compareAtPrice')!) *
+                                      100
+                                  )}
+                                  % OFF
+                                </Badge>
+                              </>
+                            )}
                         </div>
                       </div>
                     )}
@@ -516,7 +590,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         </FormItem>
                       )}
                     />
-                    
+
                     {form.watch('trackInventory') && (
                       <>
                         <FormField
@@ -526,19 +600,40 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                             <FormItem>
                               <FormLabel>SKU (Stock Keeping Unit)</FormLabel>
                               <FormControl>
-                                <Input placeholder="ABC-123" {...field} />
+                                <div className="relative">
+                                  <Input
+                                    placeholder="Auto-generated"
+                                    {...field}
+                                    className="pr-20"
+                                  />
+                                  {mode === 'create' && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
+                                    >
+                                      Auto
+                                    </Badge>
+                                  )}
+                                </div>
                               </FormControl>
+                              <FormDescription>
+                                {mode === 'create'
+                                  ? 'Auto-generated from product title. You can edit if needed.'
+                                  : 'Product SKU for inventory tracking'}
+                              </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="barcode"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Barcode (ISBN, UPC, GTIN, etc.)</FormLabel>
+                              <FormLabel>
+                                Barcode (ISBN, UPC, GTIN, etc.)
+                              </FormLabel>
                               <FormControl>
                                 <Input placeholder="1234567890" {...field} />
                               </FormControl>
@@ -546,7 +641,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="quantity"
@@ -557,7 +652,11 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                                 <Input
                                   type="number"
                                   {...field}
-                                  onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
                                 />
                               </FormControl>
                               <FormMessage />
@@ -612,7 +711,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="productType"
@@ -627,14 +726,18 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                                     <HelpCircle className="h-3 w-3 text-muted-foreground" />
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    The type of product (e.g., Shoes, T-Shirt, Electronics)
+                                    The type of product (e.g., Shoes, T-Shirt,
+                                    Electronics)
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             </div>
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="Shoes, T-Shirt, etc." {...field} />
+                            <Input
+                              placeholder="Shoes, T-Shirt, etc."
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -660,25 +763,32 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Select Collections</FormLabel>
-                          <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
                             {collections.map((collection) => (
-                              <div key={collection.id} className="flex items-center space-x-2">
+                              <div
+                                key={collection.id}
+                                className="flex items-center space-x-2"
+                              >
                                 <Checkbox
                                   checked={field.value?.includes(collection.id)}
                                   onCheckedChange={(checked) => {
                                     const updated = checked
                                       ? [...(field.value || []), collection.id]
-                                      : field.value?.filter((id) => id !== collection.id) || []
+                                      : field.value?.filter(
+                                          (id) => id !== collection.id
+                                        ) || []
                                     field.onChange(updated)
                                   }}
                                 />
-                                <label className="text-sm cursor-pointer flex-1">
+                                <label className="flex-1 cursor-pointer text-sm">
                                   {collection.title}
                                 </label>
                               </div>
                             ))}
                             {collections.length === 0 && (
-                              <p className="text-sm text-muted-foreground">No collections available</p>
+                              <p className="text-sm text-muted-foreground">
+                                No collections available
+                              </p>
                             )}
                           </div>
                           <FormMessage />
@@ -705,25 +815,32 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Select Categories</FormLabel>
-                          <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
                             {categories.map((category) => (
-                              <div key={category.id} className="flex items-center space-x-2">
+                              <div
+                                key={category.id}
+                                className="flex items-center space-x-2"
+                              >
                                 <Checkbox
                                   checked={field.value?.includes(category.id)}
                                   onCheckedChange={(checked) => {
                                     const updated = checked
                                       ? [...(field.value || []), category.id]
-                                      : field.value?.filter((id) => id !== category.id) || []
+                                      : field.value?.filter(
+                                          (id) => id !== category.id
+                                        ) || []
                                     field.onChange(updated)
                                   }}
                                 />
-                                <label className="text-sm cursor-pointer flex-1">
+                                <label className="flex-1 cursor-pointer text-sm">
                                   {category.name}
                                 </label>
                               </div>
                             ))}
                             {categories.length === 0 && (
-                              <p className="text-sm text-muted-foreground">No categories available</p>
+                              <p className="text-sm text-muted-foreground">
+                                No categories available
+                              </p>
                             )}
                           </div>
                           <FormMessage />
@@ -742,8 +859,10 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
 
             {/* SEO & Social Tab */}
             <TabsContent value="seo" className="space-y-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">Search Engine Optimization</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-medium">
+                  Search Engine Optimization
+                </h3>
                 <Button
                   type="button"
                   variant="outline"
@@ -753,7 +872,11 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                     handleGenerateSEO()
                   }}
                   disabled={isGeneratingSEO}
-                  title={!form.watch('title') ? 'Enter a product title first' : 'Generate SEO metadata'}
+                  title={
+                    !form.watch('title')
+                      ? 'Enter a product title first'
+                      : 'Generate SEO metadata'
+                  }
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
                   {isGeneratingSEO ? 'Generating...' : 'Generate with AI'}
@@ -776,7 +899,10 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         <FormItem>
                           <FormLabel>SEO Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="SEO optimized title" {...field} />
+                            <Input
+                              placeholder="SEO optimized title"
+                              {...field}
+                            />
                           </FormControl>
                           <FormDescription>
                             {field.value?.length || 0}/70 characters
@@ -785,7 +911,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="seoDescription"
@@ -805,7 +931,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="keywords"
@@ -813,7 +939,10 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         <FormItem>
                           <FormLabel>Keywords</FormLabel>
                           <FormControl>
-                            <Input placeholder="keyword1, keyword2, keyword3" {...field} />
+                            <Input
+                              placeholder="keyword1, keyword2, keyword3"
+                              {...field}
+                            />
                           </FormControl>
                           <FormDescription>
                             Comma-separated keywords for SEO
@@ -824,13 +953,20 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                     />
 
                     {/* Google Preview */}
-                    <div className="p-4 bg-muted/50 rounded-lg space-y-1">
+                    <div className="space-y-1 rounded-lg bg-muted/50 p-4">
                       <p className="text-sm font-medium text-blue-600">
-                        {form.watch('seoTitle') || form.watch('title') || 'Page Title'}
+                        {form.watch('seoTitle') ||
+                          form.watch('title') ||
+                          'Page Title'}
                       </p>
-                      <p className="text-xs text-green-600">yourstore.com/products/{form.watch('handle') || 'product'}</p>
+                      <p className="text-xs text-green-600">
+                        yourstore.com/products/
+                        {form.watch('handle') || 'product'}
+                      </p>
                       <p className="text-sm text-muted-foreground">
-                        {form.watch('seoDescription') || form.watch('description')?.substring(0, 160) || 'Page description will appear here'}
+                        {form.watch('seoDescription') ||
+                          form.watch('description')?.substring(0, 160) ||
+                          'Page description will appear here'}
                       </p>
                     </div>
                   </CardContent>
@@ -854,13 +990,16 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         <FormItem>
                           <FormLabel>OG Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="Title for social sharing" {...field} />
+                            <Input
+                              placeholder="Title for social sharing"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="ogDescription"
@@ -894,7 +1033,10 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Card Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue />
@@ -902,14 +1044,16 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="summary">Summary</SelectItem>
-                              <SelectItem value="summary_large_image">Summary Large Image</SelectItem>
+                              <SelectItem value="summary_large_image">
+                                Summary Large Image
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="twitterTitle"
@@ -923,7 +1067,7 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={form.control}
                       name="twitterDescription"

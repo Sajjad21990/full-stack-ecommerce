@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Search, Filter, X } from 'lucide-react'
+import { Search, Filter, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -13,31 +13,49 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { useDebounce } from '@/hooks/use-debounce'
 
 export function ProductsFilters() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('search') || '')
   const [status, setStatus] = useState(searchParams.get('status') || '')
-  
-  const updateFilters = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams)
-    
-    if (value && value !== 'all') {
-      params.set(key, value)
-    } else {
-      params.delete(key)
+  const [isSearching, setIsSearching] = useState(false)
+
+  // Debounced search value for real-time search
+  const debouncedSearch = useDebounce(search, 500)
+
+  const updateFilters = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams)
+
+      if (value && value !== 'all') {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+
+      // Reset to first page when filters change
+      params.delete('page')
+
+      router.push(`?${params.toString()}`)
+    },
+    [searchParams, router]
+  )
+
+  // Auto-search when debounced value changes
+  useEffect(() => {
+    if (debouncedSearch !== searchParams.get('search')) {
+      setIsSearching(true)
+      updateFilters('search', debouncedSearch)
+      // Reset loading state after navigation
+      setTimeout(() => setIsSearching(false), 500)
     }
-    
-    // Reset to first page when filters change
-    params.delete('page')
-    
-    router.push(`?${params.toString()}`)
-  }
+  }, [debouncedSearch, searchParams, updateFilters])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    updateFilters('search', search)
+    // Search is already handled by the debounced effect
   }
 
   const clearFilters = () => {
@@ -55,21 +73,37 @@ export function ProductsFilters() {
         {/* Search */}
         <form onSubmit={handleSearchSubmit} className="flex-1">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {isSearching ? (
+              <Loader2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            )}
             <Input
-              placeholder="Search products..."
+              placeholder="Search by title, SKU, vendor..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-4"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </form>
 
         {/* Status Filter */}
-        <Select value={status} onValueChange={(value) => {
-          setStatus(value)
-          updateFilters('status', value)
-        }}>
+        <Select
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value)
+            updateFilters('status', value)
+          }}
+        >
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
@@ -83,8 +117,8 @@ export function ProductsFilters() {
 
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={clearFilters}
             className="w-full sm:w-auto"
           >
@@ -108,7 +142,7 @@ export function ProductsFilters() {
                   setSearch('')
                   updateFilters('search', '')
                 }}
-                className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5"
+                className="ml-1 rounded-full p-0.5 hover:bg-secondary-foreground/20"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -122,7 +156,7 @@ export function ProductsFilters() {
                   setStatus('')
                   updateFilters('status', '')
                 }}
-                className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5"
+                className="ml-1 rounded-full p-0.5 hover:bg-secondary-foreground/20"
               >
                 <X className="h-3 w-3" />
               </button>

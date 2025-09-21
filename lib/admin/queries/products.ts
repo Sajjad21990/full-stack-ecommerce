@@ -1,6 +1,11 @@
 import { db } from '@/db'
 import { eq, and, or, ilike, desc, asc, count, sql } from 'drizzle-orm'
-import { products, productVariants, productOptions, optionValues } from '@/db/schema/products'
+import {
+  products,
+  productVariants,
+  productOptions,
+  optionValues,
+} from '@/db/schema/products'
 import { collections, categories } from '@/db/schema/collections'
 
 export interface ProductsFilter {
@@ -27,7 +32,9 @@ export interface ProductsResponse {
 /**
  * Get products with filters, search, and pagination
  */
-export async function getProducts(filters: ProductsFilter = {}): Promise<ProductsResponse> {
+export async function getProducts(
+  filters: ProductsFilter = {}
+): Promise<ProductsResponse> {
   const {
     search,
     status,
@@ -36,26 +43,39 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
     sortBy = 'createdAt',
     sortOrder = 'desc',
     page = 1,
-    limit = 20
+    limit = 20,
   } = filters
 
   try {
-    let query = db.select({
-      id: products.id,
-      title: products.title,
-      handle: products.handle,
-      status: products.status,
-      price: products.price,
-      trackInventory: products.trackInventory,
-      createdAt: products.createdAt,
-      updatedAt: products.updatedAt,
-      vendor: products.vendor,
-      productType: products.productType
-    }).from(products)
+    let query = db
+      .select({
+        id: products.id,
+        title: products.title,
+        handle: products.handle,
+        status: products.status,
+        price: products.price,
+        trackInventory: products.trackInventory,
+        createdAt: products.createdAt,
+        updatedAt: products.updatedAt,
+        vendor: products.vendor,
+        productType: products.productType,
+        sku: products.sku,
+        images: products.images,
+        quantity: products.quantity,
+      })
+      .from(products)
 
-    // Apply filters
+    // Apply filters - search across multiple fields
     if (search) {
-      query = query.where(ilike(products.title, `%${search}%`))
+      query = query.where(
+        or(
+          ilike(products.title, `%${search}%`),
+          ilike(products.sku, `%${search}%`),
+          ilike(products.vendor, `%${search}%`),
+          ilike(products.productType, `%${search}%`),
+          ilike(products.handle, `%${search}%`)
+        )
+      )
     }
 
     if (status) {
@@ -63,13 +83,17 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
     }
 
     // Apply sorting
-    const orderColumn = products[sortBy as keyof typeof products] || products.createdAt
-    query = sortOrder === 'desc' ? 
-      query.orderBy(desc(orderColumn)) : 
-      query.orderBy(asc(orderColumn))
+    const orderColumn =
+      products[sortBy as keyof typeof products] || products.createdAt
+    query =
+      sortOrder === 'desc'
+        ? query.orderBy(desc(orderColumn))
+        : query.orderBy(asc(orderColumn))
 
     // Get total count for pagination
-    const totalQuery = db.select({ count: sql<number>`count(*)` }).from(products)
+    const totalQuery = db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
     if (search) {
       totalQuery.where(ilike(products.title, `%${search}%`))
     }
@@ -79,7 +103,7 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
 
     const [productsResult, totalResult] = await Promise.all([
       query.limit(limit).offset((page - 1) * limit),
-      totalQuery
+      totalQuery,
     ])
 
     const total = totalResult[0]?.count || 0
@@ -90,8 +114,8 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
-      }
+        pages: Math.ceil(total / limit),
+      },
     }
   } catch (error) {
     console.error('Error fetching products:', error)
@@ -101,8 +125,8 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
         page: 1,
         limit: 20,
         total: 0,
-        pages: 0
-      }
+        pages: 0,
+      },
     }
   }
 }
@@ -112,30 +136,45 @@ export async function getProducts(filters: ProductsFilter = {}): Promise<Product
  */
 export async function getProductById(id: string) {
   try {
-    const product = await db.select().from(products).where(eq(products.id, id)).limit(1)
-    
+    const product = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, id))
+      .limit(1)
+
     if (!product || product.length === 0) {
       return null
     }
 
     // Get variants
-    const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id))
-    
+    const variants = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, id))
+
     // Get options
-    const options = await db.select().from(productOptions).where(eq(productOptions.productId, id))
-    
+    const options = await db
+      .select()
+      .from(productOptions)
+      .where(eq(productOptions.productId, id))
+
     // Get option values for each option
-    const optionsWithValues = await Promise.all(options.map(async (option) => {
-      const values = await db.select().from(optionValues).where(eq(optionValues.optionId, option.id))
-      return { ...option, optionValues: values }
-    }))
+    const optionsWithValues = await Promise.all(
+      options.map(async (option) => {
+        const values = await db
+          .select()
+          .from(optionValues)
+          .where(eq(optionValues.optionId, option.id))
+        return { ...option, optionValues: values }
+      })
+    )
 
     return {
       ...product[0],
       productOptions: optionsWithValues,
       productVariants: variants,
       productCollections: [],
-      productCategories: []
+      productCategories: [],
     }
   } catch (error) {
     console.error('Error fetching product by ID:', error)
@@ -148,8 +187,12 @@ export async function getProductById(id: string) {
  */
 export async function getProductByHandle(handle: string) {
   try {
-    const product = await db.select().from(products).where(eq(products.handle, handle)).limit(1)
-    
+    const product = await db
+      .select()
+      .from(products)
+      .where(eq(products.handle, handle))
+      .limit(1)
+
     if (!product || product.length === 0) {
       return null
     }
@@ -157,21 +200,32 @@ export async function getProductByHandle(handle: string) {
     const id = product[0].id
 
     // Get variants
-    const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id))
-    
+    const variants = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, id))
+
     // Get options
-    const options = await db.select().from(productOptions).where(eq(productOptions.productId, id))
-    
+    const options = await db
+      .select()
+      .from(productOptions)
+      .where(eq(productOptions.productId, id))
+
     // Get option values for each option
-    const optionsWithValues = await Promise.all(options.map(async (option) => {
-      const values = await db.select().from(optionValues).where(eq(optionValues.optionId, option.id))
-      return { ...option, optionValues: values }
-    }))
+    const optionsWithValues = await Promise.all(
+      options.map(async (option) => {
+        const values = await db
+          .select()
+          .from(optionValues)
+          .where(eq(optionValues.optionId, option.id))
+        return { ...option, optionValues: values }
+      })
+    )
 
     return {
       ...product[0],
       productOptions: optionsWithValues,
-      productVariants: variants
+      productVariants: variants,
     }
   } catch (error) {
     console.error('Error fetching product by handle:', error)
@@ -184,11 +238,14 @@ export async function getProductByHandle(handle: string) {
  */
 export async function getCollectionsForSelect() {
   try {
-    return await db.select({
-      id: collections.id,
-      title: collections.title,
-      handle: collections.handle
-    }).from(collections).orderBy(collections.title)
+    return await db
+      .select({
+        id: collections.id,
+        title: collections.title,
+        handle: collections.handle,
+      })
+      .from(collections)
+      .orderBy(collections.title)
   } catch (error) {
     console.error('Error fetching collections:', error)
     return []
@@ -200,11 +257,14 @@ export async function getCollectionsForSelect() {
  */
 export async function getCategoriesForSelect() {
   try {
-    return await db.select({
-      id: categories.id,
-      name: categories.name,
-      handle: categories.handle
-    }).from(categories).orderBy(categories.name)
+    return await db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        handle: categories.handle,
+      })
+      .from(categories)
+      .orderBy(categories.name)
   } catch (error) {
     console.error('Error fetching categories:', error)
     return []
@@ -216,7 +276,8 @@ export async function getCategoriesForSelect() {
  */
 export async function isHandleAvailable(handle: string, excludeId?: string) {
   try {
-    let query = db.select({ id: products.id })
+    let query = db
+      .select({ id: products.id })
       .from(products)
       .where(eq(products.handle, handle))
       .limit(1)
@@ -241,25 +302,25 @@ export async function getLowStockProducts(threshold: number = 10) {
   try {
     // Join with product variants to get inventory quantities
     const { productVariants, stockLevels } = await import('@/db/schema')
-    
-    const lowStockProducts = await db.select({
-      id: products.id,
-      title: products.title,
-      trackInventory: products.trackInventory,
-      totalStock: sql<number>`COALESCE(SUM(${stockLevels.quantity}), 0)`,
-      variantCount: sql<number>`COUNT(${productVariants.id})`
-    })
-    .from(products)
-    .leftJoin(productVariants, eq(products.id, productVariants.productId))
-    .leftJoin(stockLevels, eq(productVariants.id, stockLevels.variantId))
-    .where(and(
-      eq(products.trackInventory, true),
-      eq(products.status, 'active')
-    ))
-    .groupBy(products.id, products.title, products.trackInventory)
-    .having(sql`COALESCE(SUM(${stockLevels.quantity}), 0) <= ${threshold}`)
-    .orderBy(sql`COALESCE(SUM(${stockLevels.quantity}), 0)`)
-    
+
+    const lowStockProducts = await db
+      .select({
+        id: products.id,
+        title: products.title,
+        trackInventory: products.trackInventory,
+        totalStock: sql<number>`COALESCE(SUM(${stockLevels.quantity}), 0)`,
+        variantCount: sql<number>`COUNT(${productVariants.id})`,
+      })
+      .from(products)
+      .leftJoin(productVariants, eq(products.id, productVariants.productId))
+      .leftJoin(stockLevels, eq(productVariants.id, stockLevels.variantId))
+      .where(
+        and(eq(products.trackInventory, true), eq(products.status, 'active'))
+      )
+      .groupBy(products.id, products.title, products.trackInventory)
+      .having(sql`COALESCE(SUM(${stockLevels.quantity}), 0) <= ${threshold}`)
+      .orderBy(sql`COALESCE(SUM(${stockLevels.quantity}), 0)`)
+
     return lowStockProducts
   } catch (error) {
     console.error('Error fetching low stock products:', error)
