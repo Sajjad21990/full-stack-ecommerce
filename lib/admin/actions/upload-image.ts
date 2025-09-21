@@ -19,6 +19,8 @@ export async function uploadProductImage(formData: FormData) {
     await requireAdmin()
 
     const file = formData.get('file') as File
+    const folder = (formData.get('folder') as string) || 'products'
+
     if (!file) {
       return { success: false, error: 'No file provided' }
     }
@@ -47,7 +49,7 @@ export async function uploadProductImage(formData: FormData) {
     try {
       // Generate unique filename
       const fileExtension = file.name.split('.').pop()
-      const fileName = `products/${createId()}.${fileExtension}`
+      const fileName = `${folder}/${createId()}.${fileExtension}`
 
       // Convert File to Buffer
       const bytes = await file.arrayBuffer()

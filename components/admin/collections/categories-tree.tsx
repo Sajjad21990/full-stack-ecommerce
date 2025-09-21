@@ -2,7 +2,16 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, MoreHorizontal, Edit, Trash2 } from 'lucide-react'
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  Plus,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -44,7 +53,11 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${name}"? This action cannot be undone.`
+      )
+    ) {
       return
     }
 
@@ -67,7 +80,7 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
   // Build tree structure
   const buildTree = (parentId: string | null = null): Category[] => {
     return categories
-      .filter(cat => cat.parentId === parentId)
+      .filter((cat) => cat.parentId === parentId)
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
@@ -78,13 +91,13 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
 
     return (
       <div key={category.id}>
-        <div className="flex items-center justify-between py-2 px-2 hover:bg-muted/50 rounded-md group">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="group flex items-center justify-between rounded-md px-2 py-2 hover:bg-muted/50">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* Toggle button */}
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 flex-shrink-0"
+              className="h-6 w-6 flex-shrink-0 p-0"
               onClick={() => hasChildren && toggleExpanded(category.id)}
               disabled={!hasChildren}
             >
@@ -102,28 +115,28 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
             {/* Folder icon */}
             {hasChildren ? (
               isExpanded ? (
-                <FolderOpen className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                <FolderOpen className="h-4 w-4 flex-shrink-0 text-blue-500" />
               ) : (
-                <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                <Folder className="h-4 w-4 flex-shrink-0 text-blue-500" />
               )
             ) : (
-              <div className="h-4 w-4 border border-dashed border-muted-foreground/30 rounded flex-shrink-0" />
+              <div className="h-4 w-4 flex-shrink-0 rounded border border-dashed border-muted-foreground/30" />
             )}
 
             {/* Category info */}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <Link
-                href={`/admin/collections/categories/${category.id}`}
-                className="text-sm font-medium hover:underline truncate block"
+                href={`/admin/categories/${category.id}`}
+                className="block truncate text-sm font-medium hover:underline"
               >
                 {category.name}
               </Link>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="mt-1 flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
                   /{category.handle}
                 </span>
                 {category.productCount > 0 && (
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                  <Badge variant="secondary" className="px-1.5 py-0 text-xs">
                     {category.productCount}
                   </Badge>
                 )}
@@ -132,7 +145,7 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
           </div>
 
           {/* Actions */}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="opacity-0 transition-opacity group-hover:opacity-100">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -141,18 +154,18 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`/admin/collections/categories/${category.id}/edit`}>
+                  <Link href={`/admin/categories/${category.id}`}>
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href={`/admin/collections/categories/new?parent=${category.id}`}>
+                  <Link href={`/admin/categories/new?parent=${category.id}`}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Child
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleDelete(category.id, category.name)}
                   disabled={loadingId === category.id}
                   className="text-red-600"
@@ -169,7 +182,7 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
         {hasChildren && isExpanded && (
           <div className="ml-6 border-l border-muted-foreground/20">
             <div className="ml-4">
-              {children.map(child => renderCategory(child))}
+              {children.map((child) => renderCategory(child))}
             </div>
           </div>
         )}
@@ -181,7 +194,7 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
 
   if (categories.length === 0) {
     return (
-      <div className="text-center py-8">
+      <div className="py-8 text-center">
         <Folder className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="mt-2 text-sm font-semibold">No categories</h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -201,7 +214,7 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <span className="text-sm font-medium">
           {categories.length} categories
         </span>
@@ -211,9 +224,9 @@ export function CategoriesTree({ categories }: CategoriesTreeProps) {
           </Link>
         </Button>
       </div>
-      
+
       <div className="space-y-1">
-        {rootCategories.map(category => renderCategory(category))}
+        {rootCategories.map((category) => renderCategory(category))}
       </div>
     </div>
   )

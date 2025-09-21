@@ -57,6 +57,7 @@ interface MediaPickerDialogProps {
   accept?: string[]
   title?: string
   description?: string
+  defaultUploadFolder?: string
 }
 
 export function MediaPickerDialog({
@@ -68,6 +69,7 @@ export function MediaPickerDialog({
   accept = ['image/*'],
   title = 'Select Media',
   description = 'Choose media from your library or upload new files',
+  defaultUploadFolder = 'products',
 }: MediaPickerDialogProps) {
   const [activeTab, setActiveTab] = useState<'library' | 'upload'>('library')
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
@@ -109,6 +111,7 @@ export function MediaPickerDialog({
       const filters = {
         search: searchQuery || undefined,
         mimeType: accept.includes('image/*') ? 'image' : undefined,
+        // Don't filter by folder - show all media
         page,
         limit: 24,
         sortBy: 'createdAt' as const,
@@ -138,6 +141,8 @@ export function MediaPickerDialog({
     for (const file of files) {
       const formData = new FormData()
       formData.append('file', file)
+      // Use the default upload folder for organizing uploads
+      formData.append('folder', defaultUploadFolder)
 
       try {
         const result = await uploadProductImage(formData)

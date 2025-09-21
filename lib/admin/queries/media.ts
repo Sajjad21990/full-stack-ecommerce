@@ -313,6 +313,47 @@ export async function getMediaFolders() {
 }
 
 /**
+ * Get folders with file counts for Google Drive interface
+ */
+export async function getMediaFoldersWithCounts() {
+  try {
+    const { mediaFolders } = await import('@/db/schema/folders')
+
+    const folders = await db
+      .select({
+        id: mediaFolders.id,
+        name: mediaFolders.name,
+        path: mediaFolders.path,
+        parentId: mediaFolders.parentId,
+        depth: mediaFolders.depth,
+        createdAt: mediaFolders.createdAt,
+        // Count files in folder
+        fileCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${mediaAssets}
+          WHERE folder = ${mediaFolders.path}
+          AND status = 'active'
+        )`,
+        // Count subfolders
+        subfolderCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${mediaFolders} AS sub
+          WHERE sub.parent_id = ${mediaFolders.id}
+          AND sub.is_deleted = false
+        )`,
+      })
+      .from(mediaFolders)
+      .where(eq(mediaFolders.isDeleted, false))
+      .orderBy(mediaFolders.depth, mediaFolders.name)
+
+    return folders
+  } catch (error) {
+    console.error('Error fetching media folders with counts:', error)
+    return []
+  }
+}
+
+/**
  * Get available tags
  */
 export async function getMediaTags() {

@@ -51,21 +51,25 @@ interface UploadFile {
 
 interface MediaUploadProps {
   folders?: string[]
+  currentFolder?: string
   onUploadComplete?: () => void
+  onComplete?: () => void
   maxFiles?: number
   acceptedTypes?: string[]
 }
 
 export function MediaUpload({
   folders = [],
+  currentFolder = '',
   onUploadComplete,
+  onComplete,
   maxFiles = 10,
   acceptedTypes = ['image/*', 'video/*', 'application/pdf'],
 }: MediaUploadProps) {
   const router = useRouter()
   const [files, setFiles] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [defaultFolder, setDefaultFolder] = useState<string>('')
+  const [defaultFolder, setDefaultFolder] = useState<string>(currentFolder)
   const [defaultTags, setDefaultTags] = useState<string>('')
 
   const onDrop = useCallback(
@@ -216,6 +220,7 @@ export function MediaUpload({
 
     setUploading(false)
     onUploadComplete?.()
+    onComplete?.()
 
     // Clean up successful uploads after a delay
     setTimeout(() => {

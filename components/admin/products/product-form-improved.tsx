@@ -54,8 +54,15 @@ import {
   HelpCircle,
   Folder,
   FolderTree,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react'
-import { createProduct, updateProduct } from '@/lib/admin/actions/products'
+import {
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from '@/lib/admin/actions/products'
 import {
   getCollectionsForSelect,
   getCategoriesForSelect,
@@ -66,6 +73,16 @@ import { toast } from 'sonner'
 import { TagsInput } from './tags-input'
 import { ProductMediaUpload } from './product-media-upload'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 // Form validation schema
 const productFormSchema = z.object({
@@ -130,6 +147,8 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGeneratingSEO, setIsGeneratingSEO] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [collections, setCollections] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
 
@@ -288,6 +307,29 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
     }
   }
 
+  // Handle product deletion
+  const handleDelete = async () => {
+    if (!product?.id || mode !== 'edit') return
+
+    setIsDeleting(true)
+
+    try {
+      const result = await deleteProduct(product.id)
+
+      if (result.success) {
+        toast.success(result.message)
+        router.push('/admin/products')
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      toast.error('Failed to delete product')
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -309,6 +351,16 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
         </div>
 
         <div className="flex gap-2">
+          {mode === 'edit' && (
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
@@ -746,103 +798,159 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
                   </CardContent>
                 </Card>
 
+                {/* Collections & Categories - Compact Design */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Folder className="h-5 w-5" />
-                      Collections
-                    </CardTitle>
+                    <CardTitle>Organization</CardTitle>
                     <CardDescription>
-                      Add product to collections for better organization
+                      Group your product in collections and categories
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-6">
+                    {/* Collections */}
                     <FormField
                       control={form.control}
                       name="collectionIds"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Select Collections</FormLabel>
-                          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
-                            {collections.map((collection) => (
-                              <div
-                                key={collection.id}
-                                className="flex items-center space-x-2"
-                              >
-                                <Checkbox
-                                  checked={field.value?.includes(collection.id)}
-                                  onCheckedChange={(checked) => {
-                                    const updated = checked
-                                      ? [...(field.value || []), collection.id]
-                                      : field.value?.filter(
-                                          (id) => id !== collection.id
-                                        ) || []
-                                    field.onChange(updated)
-                                  }}
-                                />
-                                <label className="flex-1 cursor-pointer text-sm">
-                                  {collection.title}
-                                </label>
-                              </div>
-                            ))}
-                            {collections.length === 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                No collections available
+                          <div className="mb-3 flex items-center gap-2">
+                            <Folder className="h-4 w-4 text-muted-foreground" />
+                            <FormLabel className="text-sm font-medium">
+                              Collections
+                            </FormLabel>
+                            <span className="text-xs text-muted-foreground">
+                              (Marketing groups)
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {collections.length === 0 ? (
+                              <p className="text-sm italic text-muted-foreground">
+                                No collections available. Create collections to
+                                group products.
                               </p>
+                            ) : (
+                              collections.map((collection) => {
+                                const isSelected = field.value?.includes(
+                                  collection.id
+                                )
+                                return (
+                                  <Badge
+                                    key={collection.id}
+                                    variant={isSelected ? 'default' : 'outline'}
+                                    className="cursor-pointer transition-all hover:scale-105"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      const updated = isSelected
+                                        ? field.value?.filter(
+                                            (id) => id !== collection.id
+                                          ) || []
+                                        : [
+                                            ...(field.value || []),
+                                            collection.id,
+                                          ]
+                                      field.onChange(updated)
+                                    }}
+                                  >
+                                    {isSelected && (
+                                      <Check className="mr-1 h-3 w-3" />
+                                    )}
+                                    {collection.title}
+                                  </Badge>
+                                )
+                              })
                             )}
                           </div>
+                          {field.value && field.value.length > 0 && (
+                            <div className="mt-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  field.onChange([])
+                                }}
+                                className="h-7 text-xs"
+                              >
+                                <X className="mr-1 h-3 w-3" />
+                                Clear collections
+                              </Button>
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </CardContent>
-                </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FolderTree className="h-5 w-5" />
-                      Categories
-                    </CardTitle>
-                    <CardDescription>
-                      Categorize your product for navigation
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                    {/* Categories */}
                     <FormField
                       control={form.control}
                       name="categoryIds"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Select Categories</FormLabel>
-                          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
-                            {categories.map((category) => (
-                              <div
-                                key={category.id}
-                                className="flex items-center space-x-2"
-                              >
-                                <Checkbox
-                                  checked={field.value?.includes(category.id)}
-                                  onCheckedChange={(checked) => {
-                                    const updated = checked
-                                      ? [...(field.value || []), category.id]
-                                      : field.value?.filter(
-                                          (id) => id !== category.id
-                                        ) || []
-                                    field.onChange(updated)
-                                  }}
-                                />
-                                <label className="flex-1 cursor-pointer text-sm">
-                                  {category.name}
-                                </label>
-                              </div>
-                            ))}
-                            {categories.length === 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                No categories available
+                          <div className="mb-3 flex items-center gap-2">
+                            <FolderTree className="h-4 w-4 text-muted-foreground" />
+                            <FormLabel className="text-sm font-medium">
+                              Categories
+                            </FormLabel>
+                            <span className="text-xs text-muted-foreground">
+                              (Navigation hierarchy)
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {categories.length === 0 ? (
+                              <p className="text-sm italic text-muted-foreground">
+                                No categories available. Create categories for
+                                product navigation.
                               </p>
+                            ) : (
+                              categories.map((category) => {
+                                const isSelected = field.value?.includes(
+                                  category.id
+                                )
+                                return (
+                                  <Badge
+                                    key={category.id}
+                                    variant={
+                                      isSelected ? 'secondary' : 'outline'
+                                    }
+                                    className="cursor-pointer transition-all hover:scale-105"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      const updated = isSelected
+                                        ? field.value?.filter(
+                                            (id) => id !== category.id
+                                          ) || []
+                                        : [...(field.value || []), category.id]
+                                      field.onChange(updated)
+                                    }}
+                                  >
+                                    {isSelected && (
+                                      <Check className="mr-1 h-3 w-3" />
+                                    )}
+                                    {category.name}
+                                  </Badge>
+                                )
+                              })
                             )}
                           </div>
+                          {field.value && field.value.length > 0 && (
+                            <div className="mt-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  field.onChange([])
+                                }}
+                                className="h-7 text-xs"
+                              >
+                                <X className="mr-1 h-3 w-3" />
+                                Clear categories
+                              </Button>
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1091,6 +1199,30 @@ export function ProductFormImproved({ product, mode }: ProductFormProps) {
           </Tabs>
         </form>
       </Form>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this product? This action cannot
+              be undone and will also delete all variants, options, and images
+              associated with this product.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Product'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

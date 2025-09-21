@@ -3,17 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  EyeOff, 
+import {
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
   Archive,
   Package,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -44,7 +44,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatPrice } from '@/lib/utils'
-import { deleteProduct, updateProductStatus } from '@/lib/admin/actions/products'
+import {
+  deleteProduct,
+  updateProductStatus,
+  bulkDeleteProducts,
+} from '@/lib/admin/actions/products'
 import { toast } from 'sonner'
 
 interface ProductsTableProps {
@@ -58,15 +62,20 @@ interface ProductsTableProps {
   currentFilters: any
 }
 
-export function ProductsTable({ products, pagination, currentFilters }: ProductsTableProps) {
+export function ProductsTable({
+  products,
+  pagination,
+  currentFilters,
+}: ProductsTableProps) {
   const router = useRouter()
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<string | null>(null)
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedProducts(products.map(p => p.id))
+      setSelectedProducts(products.map((p) => p.id))
     } else {
       setSelectedProducts([])
     }
@@ -74,13 +83,16 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
 
   const handleSelectProduct = (productId: string, checked: boolean) => {
     if (checked) {
-      setSelectedProducts(prev => [...prev, productId])
+      setSelectedProducts((prev) => [...prev, productId])
     } else {
-      setSelectedProducts(prev => prev.filter(id => id !== productId))
+      setSelectedProducts((prev) => prev.filter((id) => id !== productId))
     }
   }
 
-  const handleStatusChange = async (productId: string, status: 'draft' | 'active' | 'archived') => {
+  const handleStatusChange = async (
+    productId: string,
+    status: 'draft' | 'active' | 'archived'
+  ) => {
     try {
       const result = await updateProductStatus(productId, status)
       if (result.success) {
@@ -110,6 +122,31 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
     setProductToDelete(null)
   }
 
+  const handleBulkDelete = () => {
+    if (selectedProducts.length === 0) {
+      toast.error('No products selected')
+      return
+    }
+    setBulkDeleteDialogOpen(true)
+  }
+
+  const confirmBulkDelete = async () => {
+    try {
+      const result = await bulkDeleteProducts(selectedProducts)
+      if (result.success) {
+        toast.success(result.message)
+        setSelectedProducts([])
+        router.refresh()
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      toast.error('Failed to delete products')
+    } finally {
+      setBulkDeleteDialogOpen(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
@@ -127,8 +164,12 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
     if (!trackInventory) {
       return <Badge variant="outline">Not tracked</Badge>
     }
-    
-    return <Badge variant="outline" className="text-green-600">Tracked</Badge>
+
+    return (
+      <Badge variant="outline" className="text-green-600">
+        Tracked
+      </Badge>
+    )
   }
 
   if (products.length === 0) {
@@ -155,7 +196,8 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
       {selectedProducts.length > 0 && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-4">
           <span className="text-sm font-medium">
-            {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
+            {selectedProducts.length} product
+            {selectedProducts.length > 1 ? 's' : ''} selected
           </span>
           <Button size="sm" variant="outline">
             <Eye className="mr-2 h-4 w-4" />
@@ -168,6 +210,10 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
           <Button size="sm" variant="outline">
             <Archive className="mr-2 h-4 w-4" />
             Archive
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
           </Button>
         </div>
       )}
@@ -198,14 +244,14 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
                 <TableCell>
                   <Checkbox
                     checked={selectedProducts.includes(product.id)}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       handleSelectProduct(product.id, checked as boolean)
                     }
                   />
                 </TableCell>
                 <TableCell>
                   <div>
-                    <Link 
+                    <Link
                       href={`/admin/products/${product.id}`}
                       className="font-medium hover:underline"
                     >
@@ -216,20 +262,9 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
-                  {getStatusBadge(product.status)}
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">
-                      {product.trackInventory ? 'Tracked' : 'Not tracked'}
-                    </div>
-                    {getStockBadge(product.trackInventory)}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {formatPrice(product.price)}
-                </TableCell>
+                <TableCell>{getStatusBadge(product.status)}</TableCell>
+                <TableCell>{getStockBadge(product.trackInventory)}</TableCell>
+                <TableCell>{formatPrice(product.price)}</TableCell>
                 <TableCell>
                   <span className="text-sm text-muted-foreground">
                     {product.productType || 'N/A'}
@@ -256,17 +291,29 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {product.status === 'active' ? (
-                        <DropdownMenuItem onClick={() => handleStatusChange(product.id, 'draft')}>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleStatusChange(product.id, 'draft')
+                          }
+                        >
                           <EyeOff className="mr-2 h-4 w-4" />
                           Unpublish
                         </DropdownMenuItem>
                       ) : (
-                        <DropdownMenuItem onClick={() => handleStatusChange(product.id, 'active')}>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleStatusChange(product.id, 'active')
+                          }
+                        >
                           <Eye className="mr-2 h-4 w-4" />
                           Publish
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={() => handleStatusChange(product.id, 'archived')}>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleStatusChange(product.id, 'archived')
+                        }
+                      >
                         <Archive className="mr-2 h-4 w-4" />
                         Archive
                       </DropdownMenuItem>
@@ -294,7 +341,7 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
       {pagination.pages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
+            Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
             {pagination.total} products
           </p>
@@ -335,7 +382,8 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this product? This action cannot be undone.
+              Are you sure you want to delete this product? This action cannot
+              be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -345,6 +393,34 @@ export function ProductsTable({ products, pagination, currentFilters }: Products
               onClick={() => productToDelete && handleDelete(productToDelete)}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Products</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedProducts.length} product
+              {selectedProducts.length > 1 ? 's' : ''}? This action cannot be
+              undone and will also delete all variants, options, and images
+              associated with these products.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={confirmBulkDelete}
+            >
+              Delete {selectedProducts.length} Product
+              {selectedProducts.length > 1 ? 's' : ''}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

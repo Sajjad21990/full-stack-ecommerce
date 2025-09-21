@@ -6,6 +6,7 @@ import { getProducts } from '@/lib/admin/queries/products'
 import { ProductsTable } from '@/components/admin/products/products-table'
 import { ProductsFilters } from '@/components/admin/products/products-filters'
 import { ProductsTableSkeleton } from '@/components/admin/products/products-table-skeleton'
+import { BulkUploadDialog } from '@/components/admin/products/bulk-upload-dialog'
 
 interface ProductsPageProps {
   searchParams: {
@@ -25,16 +26,17 @@ export default function ProductsPage({ searchParams }: ProductsPageProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground">
-            Manage your product catalog
-          </p>
+          <p className="text-muted-foreground">Manage your product catalog</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/products/create">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Product
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <BulkUploadDialog />
+          <Button asChild>
+            <Link href="/admin/products/create">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Product
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -48,21 +50,27 @@ export default function ProductsPage({ searchParams }: ProductsPageProps) {
   )
 }
 
-async function ProductsTableWrapper({ searchParams }: { searchParams: ProductsPageProps['searchParams'] }) {
+async function ProductsTableWrapper({
+  searchParams,
+}: {
+  searchParams: ProductsPageProps['searchParams']
+}) {
   const filters = {
     search: searchParams.search,
     status: searchParams.status,
     page: parseInt(searchParams.page || '1'),
     limit: parseInt(searchParams.limit || '20'),
-    sortBy: searchParams.sortBy as any,
-    sortOrder: searchParams.sortOrder
+    sortBy:
+      (searchParams.sortBy as 'title' | 'price' | 'createdAt' | 'updatedAt') ||
+      'createdAt',
+    sortOrder: (searchParams.sortOrder as 'asc' | 'desc') || 'desc',
   }
 
   const { products, pagination } = await getProducts(filters)
 
   return (
-    <ProductsTable 
-      products={products} 
+    <ProductsTable
+      products={products}
       pagination={pagination}
       currentFilters={filters}
     />

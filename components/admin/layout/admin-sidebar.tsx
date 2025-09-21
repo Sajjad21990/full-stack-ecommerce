@@ -17,7 +17,8 @@ import {
   UserCheck,
   Warehouse,
   Shield,
-  Download
+  Download,
+  FolderTree,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'next-auth/react'
@@ -28,7 +29,7 @@ const navigationItems = [
     items: [
       { icon: Home, label: 'Dashboard', href: '/admin', exactMatch: true },
       { icon: BarChart, label: 'Analytics', href: '/admin/analytics' },
-    ]
+    ],
   },
   {
     title: 'Catalog',
@@ -36,8 +37,9 @@ const navigationItems = [
       { icon: Package, label: 'Products', href: '/admin/products' },
       { icon: Warehouse, label: 'Inventory', href: '/admin/inventory' },
       { icon: FileText, label: 'Collections', href: '/admin/collections' },
+      { icon: FolderTree, label: 'Categories', href: '/admin/categories' },
       { icon: Image, label: 'Media', href: '/admin/media' },
-    ]
+    ],
   },
   {
     title: 'Sales',
@@ -45,17 +47,21 @@ const navigationItems = [
       { icon: ShoppingCart, label: 'Orders', href: '/admin/orders' },
       { icon: Users, label: 'Customers', href: '/admin/customers' },
       { icon: Tag, label: 'Discounts', href: '/admin/discounts' },
-    ]
+    ],
   },
   {
     title: 'Settings',
     items: [
       { icon: UserCheck, label: 'Users', href: '/admin/users' },
       { icon: Shield, label: 'Audit Logs', href: '/admin/audit' },
-      { icon: Download, label: 'Export / Import', href: '/admin/export-import' },
+      {
+        icon: Download,
+        label: 'Export / Import',
+        href: '/admin/export-import',
+      },
       { icon: Settings, label: 'General', href: '/admin/settings' },
-    ]
-  }
+    ],
+  },
 ]
 
 interface AdminSidebarProps {
@@ -87,7 +93,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto space-y-6 px-3 py-4">
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
         {navigationItems.map((section) => (
           <div key={section.title}>
             <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -97,15 +103,17 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               {section.items.map((item) => {
                 const Icon = item.icon
                 const active = isActive(item.href, item.exactMatch)
-                
+
                 return (
                   <Link key={item.href} href={item.href}>
-                    <div className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      active 
-                        ? "bg-accent text-accent-foreground" 
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    )}>
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        active
+                          ? 'bg-accent text-accent-foreground'
+                          : 'hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
                       <Icon className="h-4 w-4" />
                       {item.label}
                     </div>
@@ -122,9 +130,11 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <div className="mb-3 px-3">
           <p className="text-sm font-medium">{user.name}</p>
           <p className="text-xs text-muted-foreground">{user.email}</p>
-          <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+          <p className="text-xs capitalize text-muted-foreground">
+            {user.role}
+          </p>
         </div>
-        
+
         <Button
           variant="ghost"
           size="sm"

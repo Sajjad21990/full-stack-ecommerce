@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Upload,
@@ -23,7 +23,8 @@ import {
   uploadProductImage,
   deleteProductImage,
 } from '@/lib/admin/actions/upload-image'
-import { MediaPickerDialog } from '@/components/admin/media/media-picker-dialog'
+import { GoogleDriveMediaPicker } from '@/components/admin/media/google-drive-media-picker'
+import { getMediaForPicker } from '@/lib/admin/actions/get-media-for-picker'
 import { toast } from 'sonner'
 
 interface ProductMediaUploadProps {
@@ -43,6 +44,35 @@ export function ProductMediaUpload({
     {}
   )
   const [showMediaPicker, setShowMediaPicker] = useState(false)
+  const [mediaData, setMediaData] = useState<{ media: any[]; folders: any[] }>({
+    media: [],
+    folders: [],
+  })
+  const [loadingMedia, setLoadingMedia] = useState(false)
+
+  // Load media data when picker is opened
+  useEffect(() => {
+    if (showMediaPicker && mediaData.media.length === 0) {
+      loadMediaData()
+    }
+  }, [showMediaPicker])
+
+  const loadMediaData = async () => {
+    setLoadingMedia(true)
+    try {
+      const result = await getMediaForPicker()
+      if (result.success) {
+        setMediaData({
+          media: result.media,
+          folders: result.folders,
+        })
+      }
+    } catch (error) {
+      toast.error('Failed to load media library')
+    } finally {
+      setLoadingMedia(false)
+    }
+  }
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -164,62 +194,71 @@ export function ProductMediaUpload({
 
           {/* Upload Area */}
           {images.length < maxImages && (
-            <div
-              {...getRootProps()}
-              className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-                isDragActive || dragActive
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-              } `}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center gap-3">
-                {isUploading ? (
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                ) : isDragActive ? (
-                  <Upload className="h-8 w-8 text-primary" />
-                ) : (
-                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                )}
-                <div>
-                  <p className="text-sm font-medium">
-                    {isUploading
-                      ? 'Uploading images...'
-                      : isDragActive
-                        ? 'Drop images here'
-                        : 'Drag & drop images, or click to select'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {isUploading
-                      ? 'Please wait while we upload your images'
-                      : images.length === 0
-                        ? `Upload up to ${maxImages} images (JPG, PNG, GIF, WebP)`
-                        : `Add ${maxImages - images.length} more image${maxImages - images.length !== 1 ? 's' : ''}`}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  disabled={isUploading}
-                >
+            <div className="space-y-4">
+              <div
+                {...getRootProps()}
+                className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                  isDragActive || dragActive
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                } `}
+              >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center gap-3">
                   {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  ) : isDragActive ? (
+                    <Upload className="h-8 w-8 text-primary" />
                   ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Choose Images
-                    </>
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   )}
-                </Button>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {isUploading
+                        ? 'Uploading images...'
+                        : isDragActive
+                          ? 'Drop images here'
+                          : 'Drag & drop images, or click to select'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {isUploading
+                        ? 'Please wait while we upload your images'
+                        : images.length === 0
+                          ? `Upload up to ${maxImages} images (JPG, PNG, GIF, WebP)`
+                          : `Add ${maxImages - images.length} more image${maxImages - images.length !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Choose Images
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Separate button outside dropzone */}
+              <div className="flex justify-center">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-2"
-                  onClick={() => setShowMediaPicker(true)}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowMediaPicker(true)
+                  }}
                 >
                   <FolderOpen className="mr-2 h-4 w-4" />
                   Choose from Library
@@ -239,16 +278,18 @@ export function ProductMediaUpload({
         </CardContent>
       </Card>
 
-      {/* Media Picker Dialog */}
-      <MediaPickerDialog
+      {/* Google Drive Media Picker */}
+      <GoogleDriveMediaPicker
         open={showMediaPicker}
         onOpenChange={setShowMediaPicker}
         onSelect={handleMediaSelect}
+        initialMedia={mediaData.media}
+        initialFolders={mediaData.folders}
         multiple={true}
         maxSelections={maxImages - images.length}
         accept={['image/*']}
         title="Select Product Images"
-        description="Choose images from your media library to add to this product"
+        description="Choose images from your media library or upload to products folder"
       />
     </>
   )

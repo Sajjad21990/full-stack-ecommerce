@@ -1,13 +1,15 @@
 'use server'
 
 import { db } from '@/db'
-import { eq, sql, inArray } from 'drizzle-orm'
+import { eq, sql, inArray, and } from 'drizzle-orm'
 import {
   products,
   productVariants,
   productOptions,
   optionValues,
+  productImages,
 } from '@/db/schema/products'
+import { stockLevels, inventoryLocations } from '@/db/schema/inventory'
 import { createId } from '@paralleldrive/cuid2'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -62,6 +64,47 @@ const ProductFormSchema = ProductSchema.extend({
 export type ProductFormData = z.infer<typeof ProductFormSchema>
 
 /**
+ * Create stock levels for a product variant at all active locations
+ */
+async function createStockLevelsForVariant(variantId: string) {
+  try {
+    // Get all active inventory locations
+    const locations = await db
+      .select({ id: inventoryLocations.id })
+      .from(inventoryLocations)
+      .where(eq(inventoryLocations.isActive, true))
+
+    // If no locations exist, create a default one
+    if (locations.length === 0) {
+      await db.insert(inventoryLocations).values({
+        id: 'default-warehouse',
+        name: 'Main Warehouse',
+        code: 'MAIN',
+        type: 'warehouse',
+        isActive: true,
+        isDefault: true,
+        fulfillsOnlineOrders: true,
+      })
+      locations.push({ id: 'default-warehouse' })
+    }
+
+    // Create stock level entries for each location
+    const stockLevelEntries = locations.map((location) => ({
+      id: createId(),
+      variantId,
+      locationId: location.id,
+      quantity: 0,
+      reorderPoint: 10,
+      reorderQuantity: 50,
+    }))
+
+    await db.insert(stockLevels).values(stockLevelEntries)
+  } catch (error) {
+    console.error('Error creating stock levels:', error)
+  }
+}
+
+/**
  * Create a new product
  */
 export async function createProduct(data: ProductFormData) {
@@ -86,7 +129,7 @@ export async function createProduct(data: ProductFormData) {
       }
     }
 
-    // Create product with all fields including images, SKU, etc.
+    // Create product with all fields
     const productId = createId()
     const productData: any = {
       id: productId,
@@ -102,22 +145,14 @@ export async function createProduct(data: ProductFormData) {
       productType: validatedData.productType,
       tags: validatedData.tags,
       trackInventory: validatedData.trackInventory,
-      seoTitle: validatedData.seoTitle,
-      seoDescription: validatedData.seoDescription,
     }
 
-    // Add optional fields if provided
-    if ((data as any).images?.length > 0) {
-      productData.images = (data as any).images
+    // Add SEO fields if provided
+    if ((data as any).seoTitle) {
+      productData.seoTitle = (data as any).seoTitle
     }
-    if ((data as any).sku) {
-      productData.sku = (data as any).sku
-    }
-    if ((data as any).barcode) {
-      productData.barcode = (data as any).barcode
-    }
-    if ((data as any).quantity !== undefined) {
-      productData.quantity = (data as any).quantity
+    if ((data as any).seoDescription) {
+      productData.seoDescription = (data as any).seoDescription
     }
     if ((data as any).keywords) {
       productData.keywords = (data as any).keywords
@@ -146,21 +181,46 @@ export async function createProduct(data: ProductFormData) {
 
     const newProduct = await db.insert(products).values(productData).returning()
 
+    // Handle product images
+    if ((data as any).images?.length > 0) {
+      const imageInserts = (data as any).images.map(
+        (url: string, index: number) => ({
+          id: createId(),
+          productId,
+          url,
+          position: index,
+          altText: `${validatedData.title} - Image ${index + 1}`,
+        })
+      )
+      await db.insert(productImages).values(imageInserts)
+    }
+
     // Create default variant if no variants provided
     if (validatedData.variants.length === 0) {
+      const defaultSku = (data as any).sku || validatedData.handle.toUpperCase()
+      const defaultQuantity = (data as any).quantity || 0
+      const variantId = createId()
+
       await db.insert(productVariants).values({
-        id: createId(),
+        id: variantId,
         productId,
         title: 'Default',
         price: Math.round(validatedData.price * 100),
-        sku: validatedData.handle.toUpperCase(),
-        inventoryQuantity: 0,
+        sku: defaultSku,
+        inventoryQuantity: defaultQuantity,
       })
+
+      // Create stock levels if inventory tracking is enabled
+      if (validatedData.trackInventory) {
+        await createStockLevelsForVariant(variantId)
+      }
     } else {
       // Create variants
       for (const variant of validatedData.variants) {
+        const variantId = createId()
+
         await db.insert(productVariants).values({
-          id: createId(),
+          id: variantId,
           productId,
           title: variant.title,
           price: Math.round(variant.price * 100),
@@ -170,6 +230,11 @@ export async function createProduct(data: ProductFormData) {
           option2: variant.option2,
           option3: variant.option3,
         })
+
+        // Create stock levels if inventory tracking is enabled
+        if (validatedData.trackInventory) {
+          await createStockLevelsForVariant(variantId)
+        }
       }
     }
 
@@ -240,11 +305,78 @@ export async function updateProduct(id: string, data: ProductFormData) {
         productType: validatedData.productType,
         tags: validatedData.tags,
         trackInventory: validatedData.trackInventory,
-        seoTitle: validatedData.seoTitle,
-        seoDescription: validatedData.seoDescription,
         updatedAt: new Date(),
       })
       .where(eq(products.id, id))
+
+    // Handle image updates if provided
+    if ((data as any).images !== undefined) {
+      // Delete existing images
+      await db.delete(productImages).where(eq(productImages.productId, id))
+
+      // Insert new images
+      if ((data as any).images?.length > 0) {
+        const imageInserts = (data as any).images.map(
+          (url: string, index: number) => ({
+            id: createId(),
+            productId: id,
+            url,
+            position: index,
+            altText: `${validatedData.title} - Image ${index + 1}`,
+          })
+        )
+        await db.insert(productImages).values(imageInserts)
+      }
+    }
+
+    // Handle quantity updates for tracked inventory
+    if (validatedData.trackInventory && (data as any).quantity !== undefined) {
+      // Get the default variant for this product
+      const variants = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(eq(productVariants.productId, id))
+        .limit(1)
+
+      if (variants.length > 0) {
+        const variantId = variants[0].id
+
+        // Get default location
+        const locations = await db
+          .select({ id: inventoryLocations.id })
+          .from(inventoryLocations)
+          .where(eq(inventoryLocations.isDefault, true))
+          .limit(1)
+
+        if (locations.length > 0) {
+          const locationId = locations[0].id
+          const newQuantity = (data as any).quantity
+
+          // Update stock level in inventory system
+          await db
+            .update(stockLevels)
+            .set({
+              quantity: newQuantity,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(stockLevels.variantId, variantId),
+                eq(stockLevels.locationId, locationId)
+              )
+            )
+
+          // Also update the variant's inventory quantity to keep them in sync
+          await db
+            .update(productVariants)
+            .set({
+              inventoryQuantity: newQuantity,
+              updatedAt: new Date(),
+            })
+            .where(eq(productVariants.id, variantId))
+        }
+      }
+    }
 
     // TODO: Update variants (complex logic for add/update/delete variants)
     // For now, we'll handle this in a separate action
@@ -252,6 +384,7 @@ export async function updateProduct(id: string, data: ProductFormData) {
     // Revalidate
     revalidatePath('/admin/products')
     revalidatePath(`/admin/products/${id}`)
+    revalidatePath('/admin/inventory')
 
     return {
       success: true,
@@ -283,7 +416,10 @@ export async function deleteProduct(id: string) {
     // Verify admin access
     await requireAdmin()
 
-    // Delete variants first (foreign key constraint)
+    // Delete product images first
+    await db.delete(productImages).where(eq(productImages.productId, id))
+
+    // Delete variants (foreign key constraint)
     await db.delete(productVariants).where(eq(productVariants.productId, id))
 
     // Delete product options and values
@@ -446,7 +582,10 @@ export async function bulkDeleteProducts(ids: string[]) {
       const product = currentProducts.find((p) => p.id === id)
 
       try {
-        // Delete variants first (foreign key constraint)
+        // Delete product images first
+        await db.delete(productImages).where(eq(productImages.productId, id))
+
+        // Delete variants (foreign key constraint)
         await db
           .delete(productVariants)
           .where(eq(productVariants.productId, id))

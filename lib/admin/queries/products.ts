@@ -5,6 +5,7 @@ import {
   productVariants,
   productOptions,
   optionValues,
+  productImages,
 } from '@/db/schema/products'
 import { collections, categories } from '@/db/schema/collections'
 
@@ -54,14 +55,15 @@ export async function getProducts(
         handle: products.handle,
         status: products.status,
         price: products.price,
+        compareAtPrice: products.compareAtPrice,
         trackInventory: products.trackInventory,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
         vendor: products.vendor,
         productType: products.productType,
-        sku: products.sku,
-        images: products.images,
-        quantity: products.quantity,
+        tags: products.tags,
+        description: products.description,
+        publishedAt: products.publishedAt,
       })
       .from(products)
 
@@ -70,10 +72,10 @@ export async function getProducts(
       query = query.where(
         or(
           ilike(products.title, `%${search}%`),
-          ilike(products.sku, `%${search}%`),
           ilike(products.vendor, `%${search}%`),
           ilike(products.productType, `%${search}%`),
-          ilike(products.handle, `%${search}%`)
+          ilike(products.handle, `%${search}%`),
+          ilike(products.description, `%${search}%`)
         )
       )
     }
@@ -83,22 +85,45 @@ export async function getProducts(
     }
 
     // Apply sorting
-    const orderColumn =
-      products[sortBy as keyof typeof products] || products.createdAt
+    let orderColumn
+    switch (sortBy) {
+      case 'title':
+        orderColumn = products.title
+        break
+      case 'price':
+        orderColumn = products.price
+        break
+      case 'updatedAt':
+        orderColumn = products.updatedAt
+        break
+      case 'createdAt':
+      default:
+        orderColumn = products.createdAt
+        break
+    }
+
     query =
       sortOrder === 'desc'
         ? query.orderBy(desc(orderColumn))
         : query.orderBy(asc(orderColumn))
 
     // Get total count for pagination
-    const totalQuery = db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
+    let totalQuery = db.select({ count: sql<number>`count(*)` }).from(products)
+
+    // Apply the same filters to count query
     if (search) {
-      totalQuery.where(ilike(products.title, `%${search}%`))
+      totalQuery = totalQuery.where(
+        or(
+          ilike(products.title, `%${search}%`),
+          ilike(products.vendor, `%${search}%`),
+          ilike(products.productType, `%${search}%`),
+          ilike(products.handle, `%${search}%`),
+          ilike(products.description, `%${search}%`)
+        )
+      )
     }
     if (status) {
-      totalQuery.where(eq(products.status, status))
+      totalQuery = totalQuery.where(eq(products.status, status))
     }
 
     const [productsResult, totalResult] = await Promise.all([
@@ -169,10 +194,18 @@ export async function getProductById(id: string) {
       })
     )
 
+    // Get product images
+    const images = await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, id))
+      .orderBy(asc(productImages.position))
+
     return {
       ...product[0],
       productOptions: optionsWithValues,
       productVariants: variants,
+      images: images.map((img) => img.url),
       productCollections: [],
       productCategories: [],
     }
@@ -222,10 +255,18 @@ export async function getProductByHandle(handle: string) {
       })
     )
 
+    // Get product images
+    const images = await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, id))
+      .orderBy(asc(productImages.position))
+
     return {
       ...product[0],
       productOptions: optionsWithValues,
       productVariants: variants,
+      images: images.map((img) => img.url),
     }
   } catch (error) {
     console.error('Error fetching product by handle:', error)

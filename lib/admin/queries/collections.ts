@@ -1,6 +1,11 @@
 import { db } from '@/db'
 import { eq, ilike, sql, desc, asc, and, or } from 'drizzle-orm'
-import { collections, productCollections, categories, productCategories } from '@/db/schema/collections'
+import {
+  collections,
+  productCollections,
+  categories,
+  productCategories,
+} from '@/db/schema/collections'
 import { products } from '@/db/schema/products'
 
 export interface CollectionsFilter {
@@ -25,40 +30,44 @@ export interface CollectionsResponse {
 /**
  * Get collections with filters, search, and pagination
  */
-export async function getCollections(filters: CollectionsFilter = {}): Promise<CollectionsResponse> {
+export async function getCollections(
+  filters: CollectionsFilter = {}
+): Promise<CollectionsResponse> {
   const {
     search,
     status,
     sortBy = 'position',
     sortOrder = 'asc',
     page = 1,
-    limit = 20
+    limit = 20,
   } = filters
 
   try {
-    let query = db.select({
-      id: collections.id,
-      handle: collections.handle,
-      title: collections.title,
-      description: collections.description,
-      image: collections.image,
-      status: collections.status,
-      position: collections.position,
-      rulesType: collections.rulesType,
-      publishedAt: collections.publishedAt,
-      createdAt: collections.createdAt,
-      updatedAt: collections.updatedAt,
-      // Count of products in collection
-      productCount: sql<number>`(
+    let query = db
+      .select({
+        id: collections.id,
+        handle: collections.handle,
+        title: collections.title,
+        description: collections.description,
+        image: collections.image,
+        status: collections.status,
+        position: collections.position,
+        rulesType: collections.rulesType,
+        publishedAt: collections.publishedAt,
+        createdAt: collections.createdAt,
+        updatedAt: collections.updatedAt,
+        // Count of products in collection
+        productCount: sql<number>`(
         SELECT COUNT(*) 
         FROM product_collections pc 
         WHERE pc.collection_id = ${collections.id}
-      )`
-    }).from(collections)
+      )`,
+      })
+      .from(collections)
 
     // Apply filters
     const conditions = []
-    
+
     if (search) {
       conditions.push(
         or(
@@ -92,19 +101,22 @@ export async function getCollections(filters: CollectionsFilter = {}): Promise<C
         orderColumn = collections.position
     }
 
-    query = sortOrder === 'desc' ? 
-      query.orderBy(desc(orderColumn)) : 
-      query.orderBy(asc(orderColumn))
+    query =
+      sortOrder === 'desc'
+        ? query.orderBy(desc(orderColumn))
+        : query.orderBy(asc(orderColumn))
 
     // Get total count for pagination
-    const totalQuery = db.select({ count: sql<number>`count(*)` }).from(collections)
+    const totalQuery = db
+      .select({ count: sql<number>`count(*)` })
+      .from(collections)
     if (conditions.length > 0) {
       totalQuery.where(and(...conditions))
     }
 
     const [collectionsResult, totalResult] = await Promise.all([
       query.limit(limit).offset((page - 1) * limit),
-      totalQuery
+      totalQuery,
     ])
 
     const total = totalResult[0]?.count || 0
@@ -115,8 +127,8 @@ export async function getCollections(filters: CollectionsFilter = {}): Promise<C
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
-      }
+        pages: Math.ceil(total / limit),
+      },
     }
   } catch (error) {
     console.error('Error fetching collections:', error)
@@ -126,8 +138,8 @@ export async function getCollections(filters: CollectionsFilter = {}): Promise<C
         page: 1,
         limit: 20,
         total: 0,
-        pages: 0
-      }
+        pages: 0,
+      },
     }
   }
 }
@@ -137,21 +149,38 @@ export async function getCollections(filters: CollectionsFilter = {}): Promise<C
  */
 export async function getCollectionById(id: string) {
   try {
-    return await db.query.collections.findFirst({
-      where: eq(collections.id, id),
-      with: {
-        productCollections: {
-          with: {
-            product: {
-              with: {
-                productVariants: true
-              }
-            }
-          },
-          orderBy: (productCollections, { asc }) => [asc(productCollections.position)]
-        }
-      }
-    })
+    const [collection] = await db
+      .select()
+      .from(collections)
+      .where(eq(collections.id, id))
+      .limit(1)
+
+    if (!collection) return null
+
+    // Get product collections separately
+    const collectionProducts = await db
+      .select({
+        productId: productCollections.productId,
+        collectionId: productCollections.collectionId,
+        position: productCollections.position,
+        createdAt: productCollections.createdAt,
+        product: {
+          id: products.id,
+          title: products.title,
+          handle: products.handle,
+          status: products.status,
+          price: products.price,
+        },
+      })
+      .from(productCollections)
+      .innerJoin(products, eq(productCollections.productId, products.id))
+      .where(eq(productCollections.collectionId, id))
+      .orderBy(productCollections.position)
+
+    return {
+      ...collection,
+      productCollections: collectionProducts,
+    }
   } catch (error) {
     console.error('Error fetching collection by ID:', error)
     return null
@@ -170,13 +199,15 @@ export async function getCollectionByHandle(handle: string) {
           with: {
             product: {
               with: {
-                productVariants: true
-              }
-            }
+                productVariants: true,
+              },
+            },
           },
-          orderBy: (productCollections, { asc }) => [asc(productCollections.position)]
-        }
-      }
+          orderBy: (productCollections, { asc }) => [
+            asc(productCollections.position),
+          ],
+        },
+      },
     })
   } catch (error) {
     console.error('Error fetching collection by handle:', error)
@@ -189,28 +220,29 @@ export async function getCollectionByHandle(handle: string) {
  */
 export async function getCategories() {
   try {
-    const allCategories = await db.select({
-      id: categories.id,
-      parentId: categories.parentId,
-      handle: categories.handle,
-      name: categories.name,
-      description: categories.description,
-      image: categories.image,
-      path: categories.path,
-      level: categories.level,
-      position: categories.position,
-      isActive: categories.isActive,
-      createdAt: categories.createdAt,
-      // Count of products in category
-      productCount: sql<number>`(
+    const allCategories = await db
+      .select({
+        id: categories.id,
+        parentId: categories.parentId,
+        handle: categories.handle,
+        name: categories.name,
+        description: categories.description,
+        image: categories.image,
+        path: categories.path,
+        level: categories.level,
+        position: categories.position,
+        isActive: categories.isActive,
+        createdAt: categories.createdAt,
+        // Count of products in category
+        productCount: sql<number>`(
         SELECT COUNT(*) 
         FROM product_categories pc 
         WHERE pc.category_id = ${categories.id}
-      )`
-    })
-    .from(categories)
-    .where(eq(categories.isActive, true))
-    .orderBy(asc(categories.level), asc(categories.position))
+      )`,
+      })
+      .from(categories)
+      .where(eq(categories.isActive, true))
+      .orderBy(asc(categories.level), asc(categories.position))
 
     return allCategories
   } catch (error) {
@@ -231,12 +263,12 @@ export async function getCategoryById(id: string) {
           with: {
             product: {
               with: {
-                productVariants: true
-              }
-            }
-          }
-        }
-      }
+                productVariants: true,
+              },
+            },
+          },
+        },
+      },
     })
   } catch (error) {
     console.error('Error fetching category by ID:', error)
@@ -247,7 +279,10 @@ export async function getCategoryById(id: string) {
 /**
  * Get products not in collection
  */
-export async function getProductsNotInCollection(collectionId: string, search?: string) {
+export async function getProductsNotInCollection(
+  collectionId: string,
+  search?: string
+) {
   try {
     let query = db
       .select({
@@ -255,7 +290,7 @@ export async function getProductsNotInCollection(collectionId: string, search?: 
         title: products.title,
         handle: products.handle,
         status: products.status,
-        price: products.price
+        price: products.price,
       })
       .from(products)
       .where(
@@ -283,9 +318,13 @@ export async function getProductsNotInCollection(collectionId: string, search?: 
 /**
  * Check if collection handle is available
  */
-export async function isCollectionHandleAvailable(handle: string, excludeId?: string) {
+export async function isCollectionHandleAvailable(
+  handle: string,
+  excludeId?: string
+) {
   try {
-    const existing = await db.select({ id: collections.id })
+    const existing = await db
+      .select({ id: collections.id })
       .from(collections)
       .where(eq(collections.handle, handle))
       .limit(1)
@@ -304,9 +343,13 @@ export async function isCollectionHandleAvailable(handle: string, excludeId?: st
 /**
  * Check if category handle is available
  */
-export async function isCategoryHandleAvailable(handle: string, excludeId?: string) {
+export async function isCategoryHandleAvailable(
+  handle: string,
+  excludeId?: string
+) {
   try {
-    const existing = await db.select({ id: categories.id })
+    const existing = await db
+      .select({ id: categories.id })
       .from(categories)
       .where(eq(categories.handle, handle))
       .limit(1)
