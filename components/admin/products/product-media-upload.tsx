@@ -180,6 +180,7 @@ export function ProductMediaUpload({
                   )}
                   {/* Remove button */}
                   <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     className="absolute right-2 top-2 h-8 w-8 p-0 opacity-0 transition-opacity group-hover:opacity-100"
@@ -229,6 +230,7 @@ export function ProductMediaUpload({
                     </p>
                   </div>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="mt-2"
@@ -252,6 +254,7 @@ export function ProductMediaUpload({
               {/* Separate button outside dropzone */}
               <div className="flex justify-center">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={(e) => {

@@ -8,6 +8,24 @@ import { revalidatePath } from 'next/cache'
 import { storage, isFirebaseConfigured } from '@/lib/firebase-admin'
 import { requireAdmin } from '@/lib/auth'
 
+/**
+ * Check database connection health
+ */
+async function checkDatabaseConnection() {
+  try {
+    await db.select().from(mediaFolders).limit(1)
+    console.log('[checkDatabaseConnection] Database connection is healthy')
+    return true
+  } catch (error) {
+    console.error('[checkDatabaseConnection] Database connection failed:', {
+      error: error,
+      message: error.message,
+      code: error.code,
+    })
+    return false
+  }
+}
+
 interface CreateFolderData {
   name: string
   parentId?: string
@@ -23,12 +41,30 @@ interface MoveFolderData {
  */
 export async function createMediaFolder(data: CreateFolderData) {
   try {
+    console.log('[createMediaFolder] Starting folder creation with data:', {
+      name: data.name,
+      parentId: data.parentId,
+      environment: process.env.NODE_ENV,
+      railway: !!process.env.RAILWAY_ENVIRONMENT,
+      databaseUrl: process.env.DATABASE_URL ? 'configured' : 'not configured',
+    })
+
+    // Check database connection first
+    const dbHealthy = await checkDatabaseConnection()
+    if (!dbHealthy) {
+      return {
+        success: false,
+        error: 'Database connection failed. Please try again.',
+      }
+    }
+
     await requireAdmin()
 
     const { name, parentId } = data
 
     // Validate folder name
     if (!name.trim()) {
+      console.log('[createMediaFolder] Validation failed: Empty folder name')
       return { success: false, error: 'Folder name is required' }
     }
 
@@ -38,7 +74,15 @@ export async function createMediaFolder(data: CreateFolderData) {
       .replace(/[^a-zA-Z0-9\s-_]/g, '')
       .replace(/\s+/g, '-')
 
+    console.log('[createMediaFolder] Sanitized name:', {
+      original: name,
+      sanitized: sanitizedName,
+    })
+
     if (!sanitizedName) {
+      console.log(
+        '[createMediaFolder] Validation failed: Invalid folder name after sanitization'
+      )
       return { success: false, error: 'Invalid folder name' }
     }
 
@@ -47,71 +91,193 @@ export async function createMediaFolder(data: CreateFolderData) {
     let depth = 0
 
     if (parentId) {
-      const parentFolder = await db
-        .select()
-        .from(mediaFolders)
-        .where(eq(mediaFolders.id, parentId))
-        .limit(1)
+      console.log('[createMediaFolder] Looking up parent folder:', parentId)
 
-      if (parentFolder.length === 0) {
-        return { success: false, error: 'Parent folder not found' }
-      }
+      try {
+        const parentFolder = await db
+          .select()
+          .from(mediaFolders)
+          .where(eq(mediaFolders.id, parentId))
+          .limit(1)
 
-      const parent = parentFolder[0]
-      fullPath =
-        parent.path === 'root'
-          ? sanitizedName
-          : `${parent.path}/${sanitizedName}`
-      depth = parseInt(parent.depth) + 1
+        if (parentFolder.length === 0) {
+          console.log('[createMediaFolder] Parent folder not found:', parentId)
+          return { success: false, error: 'Parent folder not found' }
+        }
 
-      if (depth > 10) {
-        return { success: false, error: 'Maximum folder depth exceeded' }
+        const parent = parentFolder[0]
+        fullPath =
+          parent.path === 'root'
+            ? sanitizedName
+            : `${parent.path}/${sanitizedName}`
+        depth = parseInt(parent.depth) + 1
+
+        console.log('[createMediaFolder] Calculated path:', {
+          fullPath,
+          depth,
+          parentPath: parent.path,
+        })
+
+        if (depth > 10) {
+          console.log(
+            '[createMediaFolder] Validation failed: Maximum depth exceeded',
+            depth
+          )
+          return { success: false, error: 'Maximum folder depth exceeded' }
+        }
+      } catch (dbError) {
+        console.error(
+          '[createMediaFolder] Database error while fetching parent:',
+          dbError
+        )
+        return {
+          success: false,
+          error: 'Database error while validating parent folder',
+        }
       }
     }
 
     // Check for duplicate folder names in the same parent
-    const existingFolder = await db
-      .select()
-      .from(mediaFolders)
-      .where(
-        and(eq(mediaFolders.path, fullPath), eq(mediaFolders.isDeleted, false))
-      )
-      .limit(1)
+    console.log(
+      '[createMediaFolder] Checking for duplicates at path:',
+      fullPath
+    )
 
-    if (existingFolder.length > 0) {
-      return { success: false, error: 'A folder with this name already exists' }
+    try {
+      const existingFolder = await db
+        .select()
+        .from(mediaFolders)
+        .where(
+          and(
+            eq(mediaFolders.path, fullPath),
+            eq(mediaFolders.isDeleted, false)
+          )
+        )
+        .limit(1)
+
+      if (existingFolder.length > 0) {
+        console.log(
+          '[createMediaFolder] Duplicate folder found:',
+          existingFolder[0]
+        )
+        return {
+          success: false,
+          error: 'A folder with this name already exists',
+        }
+      }
+    } catch (dbError) {
+      console.error(
+        '[createMediaFolder] Database error while checking duplicates:',
+        dbError
+      )
+      return {
+        success: false,
+        error: 'Database error while checking for duplicates',
+      }
     }
 
     // Create folder in database
-    const [folder] = await db
-      .insert(mediaFolders)
-      .values({
+    console.log(
+      '[createMediaFolder] Creating folder in database with values:',
+      {
         name: sanitizedName,
         path: fullPath,
         parentId: parentId || null,
         depth: depth.toString(),
-      })
-      .returning()
+      }
+    )
 
-    // Create folder in Firebase Storage if configured
-    if (isFirebaseConfigured()) {
-      try {
-        const bucket = storage.bucket()
-        const folderRef = bucket.file(`media/${fullPath}/.keep`)
-        await folderRef.save('', {
-          metadata: { contentType: 'text/plain' },
+    try {
+      const [folder] = await db
+        .insert(mediaFolders)
+        .values({
+          name: sanitizedName,
+          path: fullPath,
+          parentId: parentId || null,
+          depth: depth.toString(),
         })
-      } catch (error) {
-        console.warn('Failed to create folder in Firebase:', error)
-        // Don't fail the operation if Firebase creation fails
+        .returning()
+
+      console.log(
+        '[createMediaFolder] Successfully created folder in database:',
+        folder.id
+      )
+
+      // Create folder in Firebase Storage if configured
+      if (isFirebaseConfigured()) {
+        console.log('[createMediaFolder] Creating folder in Firebase Storage')
+        try {
+          const bucket = storage.bucket()
+          const folderRef = bucket.file(`media/${fullPath}/.keep`)
+          await folderRef.save('', {
+            metadata: { contentType: 'text/plain' },
+          })
+          console.log(
+            '[createMediaFolder] Successfully created folder in Firebase'
+          )
+        } catch (firebaseError) {
+          console.warn(
+            '[createMediaFolder] Failed to create folder in Firebase (non-critical):',
+            firebaseError
+          )
+          // Don't fail the operation if Firebase creation fails
+        }
+      } else {
+        console.log(
+          '[createMediaFolder] Firebase not configured, skipping storage folder creation'
+        )
+      }
+
+      revalidatePath('/admin/media')
+      console.log('[createMediaFolder] Folder creation completed successfully')
+      return { success: true, folder }
+    } catch (dbError) {
+      console.error(
+        '[createMediaFolder] Database error during folder insertion:',
+        {
+          error: dbError,
+          message: dbError.message,
+          code: dbError.code,
+          constraint: dbError.constraint,
+          table: dbError.table,
+          column: dbError.column,
+        }
+      )
+
+      // Provide more specific error messages based on database errors
+      if (dbError.code === '23505') {
+        // Unique constraint violation
+        return {
+          success: false,
+          error: 'A folder with this name already exists',
+        }
+      } else if (dbError.code === '23503') {
+        // Foreign key constraint violation
+        return { success: false, error: 'Invalid parent folder reference' }
+      } else if (dbError.code === '23502') {
+        // Not null constraint violation
+        return { success: false, error: 'Missing required folder information' }
+      } else {
+        return {
+          success: false,
+          error: `Database error: ${dbError.message || 'Unknown database error'}`,
+        }
       }
     }
-
-    revalidatePath('/admin/media')
-    return { success: true, folder }
   } catch (error) {
-    console.error('Error creating folder:', error)
-    return { success: false, error: 'Failed to create folder' }
+    console.error(
+      '[createMediaFolder] Unexpected error during folder creation:',
+      {
+        error: error,
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      }
+    )
+    return {
+      success: false,
+      error: `Failed to create folder: ${error.message || 'Unknown error'}`,
+    }
   }
 }
 

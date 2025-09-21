@@ -307,7 +307,12 @@ export function GoogleDriveMediaPicker({
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 flex-1 items-center space-x-2">
                 {currentPath && (
-                  <Button variant="ghost" size="sm" onClick={handleBackClick}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleBackClick}
+                  >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 )}
@@ -316,6 +321,7 @@ export function GoogleDriveMediaPicker({
                     <div key={index} className="flex items-center space-x-1">
                       {index === 0 ? (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           className="h-6 px-2"
@@ -328,6 +334,7 @@ export function GoogleDriveMediaPicker({
                         <>
                           <span className="text-muted-foreground">/</span>
                           <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             className="h-6 px-2"
@@ -344,6 +351,7 @@ export function GoogleDriveMediaPicker({
 
               <div className="flex items-center gap-1">
                 <Button
+                  type="button"
                   variant={viewMode === 'grid' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('grid')}
@@ -351,6 +359,7 @@ export function GoogleDriveMediaPicker({
                   <Grid3X3 className="h-4 w-4" />
                 </Button>
                 <Button
+                  type="button"
                   variant={viewMode === 'list' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('list')}
@@ -525,6 +534,7 @@ export function GoogleDriveMediaPicker({
                   {multiple && ` (max ${maxSelections})`}
                 </p>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedItems(new Set())}
@@ -583,10 +593,18 @@ export function GoogleDriveMediaPicker({
         </Tabs>
 
         <DialogFooter className="mt-4 flex-shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={selectedItems.size === 0}>
+          <Button
+            type="button"
+            onClick={handleConfirm}
+            disabled={selectedItems.size === 0}
+          >
             Select {selectedItems.size > 0 && `(${selectedItems.size})`}
           </Button>
         </DialogFooter>
