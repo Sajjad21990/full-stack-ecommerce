@@ -26,7 +26,7 @@ import {
   Check,
   Loader2,
 } from 'lucide-react'
-import { getMediaAssets } from '@/lib/admin/queries/media'
+import { getMediaAssetsAction } from '@/lib/admin/actions/get-media'
 import { uploadProductImage } from '@/lib/admin/actions/upload-image'
 import { formatFileSize, formatDate } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -115,7 +115,7 @@ export function MediaPickerDialog({
         sortOrder: 'desc' as const,
       }
 
-      const result = await getMediaAssets(filters)
+      const result = await getMediaAssetsAction(filters)
 
       if (page === 1) {
         setMedia(result.media)

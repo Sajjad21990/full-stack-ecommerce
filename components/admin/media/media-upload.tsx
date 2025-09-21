@@ -36,8 +36,9 @@ import { uploadMedia } from '@/lib/admin/actions/media'
 import { formatFileSize } from '@/lib/utils'
 import { toast } from 'sonner'
 
-interface UploadFile extends File {
+interface UploadFile {
   id: string
+  file: File
   progress: number
   status: 'pending' | 'uploading' | 'success' | 'error'
   preview?: string
@@ -84,8 +85,8 @@ export function MediaUpload({
       // Add accepted files
       const newFiles = acceptedFiles.map((file) => {
         const uploadFile: UploadFile = {
-          ...file,
           id: `${file.name}-${Date.now()}`,
+          file: file,
           progress: 0,
           status: 'pending',
           folder:
@@ -159,7 +160,7 @@ export function MediaUpload({
 
         // Create FormData
         const formData = new FormData()
-        formData.append('file', file)
+        formData.append('file', file.file)
         if (file.folder && file.folder !== '__root__')
           formData.append('folder', file.folder)
         if (file.tags?.length) formData.append('tags', file.tags.join(','))
@@ -190,7 +191,7 @@ export function MediaUpload({
                 : f
             )
           )
-          toast.success(`Uploaded ${file.name}`)
+          toast.success(`Uploaded ${file.file.name}`)
         } else {
           setFiles((prev) =>
             prev.map((f) =>
@@ -199,7 +200,7 @@ export function MediaUpload({
                 : f
             )
           )
-          toast.error(result.error || `Failed to upload ${file.name}`)
+          toast.error(result.error || `Failed to upload ${file.file.name}`)
         }
       } catch (error) {
         setFiles((prev) =>
@@ -209,7 +210,7 @@ export function MediaUpload({
               : f
           )
         )
-        toast.error(`Error uploading ${file.name}`)
+        toast.error(`Error uploading ${file.file.name}`)
       }
     }
 
@@ -222,9 +223,10 @@ export function MediaUpload({
     }, 2000)
   }
 
-  const getFileIcon = (type: string) => {
-    if (type && type.startsWith('image/')) return ImageIcon
-    if (type && type.startsWith('video/')) return Film
+  const getFileIcon = (type: string | undefined) => {
+    if (!type) return File
+    if (type.startsWith('image/')) return ImageIcon
+    if (type.startsWith('video/')) return Film
     if (type === 'application/pdf') return FileText
     return File
   }
@@ -328,18 +330,18 @@ export function MediaUpload({
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {files.map((file) => {
-                const Icon = getFileIcon(file.type)
+              {files.map((uploadFile) => {
+                const Icon = getFileIcon(uploadFile.file?.type)
 
                 return (
-                  <div key={file.id} className="rounded-lg border p-4">
+                  <div key={uploadFile.id} className="rounded-lg border p-4">
                     <div className="flex items-start gap-4">
                       {/* Preview/Icon */}
                       <div className="flex-shrink-0">
-                        {file.preview ? (
+                        {uploadFile.preview ? (
                           <img
-                            src={file.preview}
-                            alt={file.name}
+                            src={uploadFile.preview}
+                            alt={uploadFile.file?.name || 'File'}
                             className="h-16 w-16 rounded object-cover"
                           />
                         ) : (
@@ -353,13 +355,18 @@ export function MediaUpload({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between">
                           <div className="min-w-0">
-                            <p className="truncate font-medium">{file.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatFileSize(file.size)} • {file.type}
+                            <p className="truncate font-medium">
+                              {uploadFile.file?.name || 'Unknown'}
                             </p>
-                            {file.tags && file.tags.length > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              {uploadFile.file
+                                ? formatFileSize(uploadFile.file.size)
+                                : '0 B'}{' '}
+                              • {uploadFile.file?.type || 'unknown'}
+                            </p>
+                            {uploadFile.tags && uploadFile.tags.length > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1">
-                                {file.tags.map((tag) => (
+                                {uploadFile.tags.map((tag) => (
                                   <Badge
                                     key={tag}
                                     variant="secondary"
@@ -375,7 +382,7 @@ export function MediaUpload({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => removeFile(file.id)}
+                            onClick={() => removeFile(uploadFile.id)}
                             disabled={uploading}
                           >
                             <X className="h-4 w-4" />
@@ -383,30 +390,33 @@ export function MediaUpload({
                         </div>
 
                         {/* Progress */}
-                        {file.status === 'uploading' && (
+                        {uploadFile.status === 'uploading' && (
                           <div className="mt-2">
-                            <Progress value={file.progress} className="h-2" />
+                            <Progress
+                              value={uploadFile.progress}
+                              className="h-2"
+                            />
                           </div>
                         )}
 
                         {/* Status */}
                         <div className="mt-2 flex items-center gap-2">
                           <div
-                            className={`h-2 w-2 rounded-full ${getStatusColor(file.status)}`}
+                            className={`h-2 w-2 rounded-full ${getStatusColor(uploadFile.status)}`}
                           />
                           <span className="text-sm capitalize">
-                            {file.status}
+                            {uploadFile.status}
                           </span>
                         </div>
 
                         {/* Metadata Inputs */}
-                        {file.status === 'pending' && (
+                        {uploadFile.status === 'pending' && (
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
                             <Input
                               placeholder="Alt text"
-                              value={file.altText || ''}
+                              value={uploadFile.altText || ''}
                               onChange={(e) =>
-                                updateFileMetadata(file.id, {
+                                updateFileMetadata(uploadFile.id, {
                                   altText: e.target.value,
                                 })
                               }
@@ -414,9 +424,9 @@ export function MediaUpload({
                             />
                             <Input
                               placeholder="Title"
-                              value={file.title || ''}
+                              value={uploadFile.title || ''}
                               onChange={(e) =>
-                                updateFileMetadata(file.id, {
+                                updateFileMetadata(uploadFile.id, {
                                   title: e.target.value,
                                 })
                               }
