@@ -1,5 +1,15 @@
 import { db } from '@/db'
-import { eq, ilike, sql, desc, asc, and, or, inArray, isNull } from 'drizzle-orm'
+import {
+  eq,
+  ilike,
+  sql,
+  desc,
+  asc,
+  and,
+  or,
+  inArray,
+  isNull,
+} from 'drizzle-orm'
 import { mediaAssets, mediaAssociations } from '@/db/schema/media-metadata'
 
 export interface MediaFilter {
@@ -33,7 +43,9 @@ export interface MediaResponse {
 /**
  * Get media assets with filters and pagination
  */
-export async function getMediaAssets(filters: MediaFilter = {}): Promise<MediaResponse> {
+export async function getMediaAssets(
+  filters: MediaFilter = {}
+): Promise<MediaResponse> {
   const {
     search,
     folder,
@@ -43,31 +55,33 @@ export async function getMediaAssets(filters: MediaFilter = {}): Promise<MediaRe
     sortBy = 'createdAt',
     sortOrder = 'desc',
     page = 1,
-    limit = 24
+    limit = 24,
   } = filters
 
   try {
-    let query = db.select({
-      id: mediaAssets.id,
-      fileName: mediaAssets.fileName,
-      originalFileName: mediaAssets.originalFileName,
-      mimeType: mediaAssets.mimeType,
-      size: mediaAssets.size,
-      url: mediaAssets.url,
-      thumbnailUrl: mediaAssets.thumbnailUrl,
-      width: mediaAssets.width,
-      height: mediaAssets.height,
-      altText: mediaAssets.altText,
-      folder: mediaAssets.folder,
-      tags: mediaAssets.tags,
-      status: mediaAssets.status,
-      usageCount: mediaAssets.usageCount,
-      lastUsedAt: mediaAssets.lastUsedAt,
-      title: mediaAssets.title,
-      description: mediaAssets.description,
-      createdAt: mediaAssets.createdAt,
-      updatedAt: mediaAssets.updatedAt
-    }).from(mediaAssets)
+    let query = db
+      .select({
+        id: mediaAssets.id,
+        fileName: mediaAssets.fileName,
+        originalFileName: mediaAssets.originalFileName,
+        mimeType: mediaAssets.mimeType,
+        size: mediaAssets.size,
+        url: mediaAssets.url,
+        thumbnailUrl: mediaAssets.thumbnailUrl,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+        altText: mediaAssets.altText,
+        folder: mediaAssets.folder,
+        tags: mediaAssets.tags,
+        status: mediaAssets.status,
+        usageCount: mediaAssets.usageCount,
+        lastUsedAt: mediaAssets.lastUsedAt,
+        title: mediaAssets.title,
+        description: mediaAssets.description,
+        createdAt: mediaAssets.createdAt,
+        updatedAt: mediaAssets.updatedAt,
+      })
+      .from(mediaAssets)
 
     // Apply filters
     const conditions = []
@@ -97,9 +111,7 @@ export async function getMediaAssets(filters: MediaFilter = {}): Promise<MediaRe
 
     if (tags && tags.length > 0) {
       // Check if any of the provided tags exist in the media tags array
-      conditions.push(
-        sql`${mediaAssets.tags} && ${tags}`
-      )
+      conditions.push(sql`${mediaAssets.tags} && ${tags}`)
     }
 
     if (status) {
@@ -126,16 +138,19 @@ export async function getMediaAssets(filters: MediaFilter = {}): Promise<MediaRe
         orderColumn = mediaAssets.createdAt
     }
 
-    query = sortOrder === 'desc' 
-      ? query.orderBy(desc(orderColumn))
-      : query.orderBy(asc(orderColumn))
+    query =
+      sortOrder === 'desc'
+        ? query.orderBy(desc(orderColumn))
+        : query.orderBy(asc(orderColumn))
 
     // Get paginated results and total count
     const [mediaResult, totalResult, statsResult] = await Promise.all([
       query.limit(limit).offset((page - 1) * limit),
-      db.select({ count: sql<number>`count(*)` }).from(mediaAssets)
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(mediaAssets)
         .where(conditions.length > 0 ? and(...conditions) : undefined),
-      getMediaStats(conditions.length > 0 ? and(...conditions) : undefined)
+      getMediaStats(conditions.length > 0 ? and(...conditions) : undefined),
     ])
 
     const total = totalResult[0]?.count || 0
@@ -146,16 +161,16 @@ export async function getMediaAssets(filters: MediaFilter = {}): Promise<MediaRe
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit),
       },
-      stats: statsResult
+      stats: statsResult,
     }
   } catch (error) {
     console.error('Error fetching media assets:', error)
     return {
       media: [],
       pagination: { page: 1, limit: 24, total: 0, pages: 0 },
-      stats: { totalFiles: 0, totalSize: 0, byMimeType: {}, byFolder: {} }
+      stats: { totalFiles: 0, totalSize: 0, byMimeType: {}, byFolder: {} },
     }
   }
 }
@@ -168,24 +183,25 @@ export async function getMediaAssetById(id: string) {
     const mediaAsset = await db.query.mediaAssets.findFirst({
       where: eq(mediaAssets.id, id),
       with: {
-        associations: true
-      }
+        associations: true,
+      },
     })
 
     if (mediaAsset) {
       // Get usage information
-      const associations = await db.select({
-        entityType: mediaAssociations.entityType,
-        entityId: mediaAssociations.entityId,
-        type: mediaAssociations.type,
-        isPrimary: mediaAssociations.isPrimary
-      })
-      .from(mediaAssociations)
-      .where(eq(mediaAssociations.mediaAssetId, id))
+      const associations = await db
+        .select({
+          entityType: mediaAssociations.entityType,
+          entityId: mediaAssociations.entityId,
+          type: mediaAssociations.type,
+          isPrimary: mediaAssociations.isPrimary,
+        })
+        .from(mediaAssociations)
+        .where(eq(mediaAssociations.mediaAssetId, id))
 
       return {
         ...mediaAsset,
-        associations
+        associations,
       }
     }
 
@@ -205,50 +221,59 @@ async function getMediaStats(whereCondition?: any) {
 
     const [totalStats, mimeTypeStats, folderStats] = await Promise.all([
       // Total files and size
-      db.select({
-        count: sql<number>`count(*)`,
-        totalSize: sql<number>`sum(${mediaAssets.size})`
-      })
-      .from(mediaAssets)
-      .where(baseCondition)
-      .limit(1),
-      
+      db
+        .select({
+          count: sql<number>`count(*)`,
+          totalSize: sql<number>`sum(${mediaAssets.size})`,
+        })
+        .from(mediaAssets)
+        .where(baseCondition)
+        .limit(1),
+
       // By MIME type
-      db.select({
-        mimeType: mediaAssets.mimeType,
-        count: sql<number>`count(*)`
-      })
-      .from(mediaAssets)
-      .where(baseCondition)
-      .groupBy(mediaAssets.mimeType),
-      
+      db
+        .select({
+          mimeType: mediaAssets.mimeType,
+          count: sql<number>`count(*)`,
+        })
+        .from(mediaAssets)
+        .where(baseCondition)
+        .groupBy(mediaAssets.mimeType),
+
       // By folder
-      db.select({
-        folder: mediaAssets.folder,
-        count: sql<number>`count(*)`
-      })
-      .from(mediaAssets)
-      .where(baseCondition)
-      .groupBy(mediaAssets.folder)
+      db
+        .select({
+          folder: mediaAssets.folder,
+          count: sql<number>`count(*)`,
+        })
+        .from(mediaAssets)
+        .where(baseCondition)
+        .groupBy(mediaAssets.folder),
     ])
 
     const total = totalStats[0]
-    const byMimeType = mimeTypeStats.reduce((acc, item) => {
-      acc[item.mimeType] = item.count
-      return acc
-    }, {} as Record<string, number>)
+    const byMimeType = mimeTypeStats.reduce(
+      (acc, item) => {
+        acc[item.mimeType] = item.count
+        return acc
+      },
+      {} as Record<string, number>
+    )
 
-    const byFolder = folderStats.reduce((acc, item) => {
-      const folder = item.folder || 'root'
-      acc[folder] = item.count
-      return acc
-    }, {} as Record<string, number>)
+    const byFolder = folderStats.reduce(
+      (acc, item) => {
+        const folder = item.folder || 'root'
+        acc[folder] = item.count
+        return acc
+      },
+      {} as Record<string, number>
+    )
 
     return {
       totalFiles: total?.count || 0,
       totalSize: total?.totalSize || 0,
       byMimeType,
-      byFolder
+      byFolder,
     }
   } catch (error) {
     console.error('Error fetching media stats:', error)
@@ -256,26 +281,31 @@ async function getMediaStats(whereCondition?: any) {
       totalFiles: 0,
       totalSize: 0,
       byMimeType: {},
-      byFolder: {}
+      byFolder: {},
     }
   }
 }
 
 /**
- * Get available folders
+ * Get available folders from the folders table
  */
 export async function getMediaFolders() {
   try {
-    const folders = await db
-      .selectDistinct({ folder: mediaAssets.folder })
-      .from(mediaAssets)
-      .where(and(
-        eq(mediaAssets.status, 'active'),
-        sql`${mediaAssets.folder} IS NOT NULL`
-      ))
-      .orderBy(asc(mediaAssets.folder))
+    const { mediaFolders } = await import('@/db/schema/folders')
 
-    return folders.map(f => f.folder).filter(Boolean)
+    const folders = await db
+      .select({
+        id: mediaFolders.id,
+        name: mediaFolders.name,
+        path: mediaFolders.path,
+        parentId: mediaFolders.parentId,
+        depth: mediaFolders.depth,
+      })
+      .from(mediaFolders)
+      .where(eq(mediaFolders.isDeleted, false))
+      .orderBy(mediaFolders.depth, mediaFolders.name)
+
+    return folders.map((f) => f.path)
   } catch (error) {
     console.error('Error fetching media folders:', error)
     return []
@@ -290,16 +320,16 @@ export async function getMediaTags() {
     const result = await db
       .select({ tags: mediaAssets.tags })
       .from(mediaAssets)
-      .where(and(
-        eq(mediaAssets.status, 'active'),
-        sql`${mediaAssets.tags} IS NOT NULL AND array_length(${mediaAssets.tags}, 1) > 0`
-      ))
+      .where(
+        and(
+          eq(mediaAssets.status, 'active'),
+          sql`${mediaAssets.tags} IS NOT NULL AND array_length(${mediaAssets.tags}, 1) > 0`
+        )
+      )
 
     // Flatten and deduplicate tags
-    const allTags = result
-      .flatMap(r => r.tags || [])
-      .filter(Boolean)
-    
+    const allTags = result.flatMap((r) => r.tags || []).filter(Boolean)
+
     return [...new Set(allTags)].sort()
   } catch (error) {
     console.error('Error fetching media tags:', error)
@@ -310,25 +340,31 @@ export async function getMediaTags() {
 /**
  * Search media for product assignment
  */
-export async function searchMediaForProducts(query?: string, limit: number = 20) {
+export async function searchMediaForProducts(
+  query?: string,
+  limit: number = 20
+) {
   try {
-    let searchQuery = db.select({
-      id: mediaAssets.id,
-      fileName: mediaAssets.fileName,
-      originalFileName: mediaAssets.originalFileName,
-      url: mediaAssets.url,
-      thumbnailUrl: mediaAssets.thumbnailUrl,
-      mimeType: mediaAssets.mimeType,
-      width: mediaAssets.width,
-      height: mediaAssets.height,
-      altText: mediaAssets.altText
-    })
-    .from(mediaAssets)
-    .where(and(
-      eq(mediaAssets.status, 'active'),
-      sql`${mediaAssets.mimeType} LIKE 'image/%'` // Only images for products
-    ))
-    .orderBy(desc(mediaAssets.createdAt))
+    let searchQuery = db
+      .select({
+        id: mediaAssets.id,
+        fileName: mediaAssets.fileName,
+        originalFileName: mediaAssets.originalFileName,
+        url: mediaAssets.url,
+        thumbnailUrl: mediaAssets.thumbnailUrl,
+        mimeType: mediaAssets.mimeType,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+        altText: mediaAssets.altText,
+      })
+      .from(mediaAssets)
+      .where(
+        and(
+          eq(mediaAssets.status, 'active'),
+          sql`${mediaAssets.mimeType} LIKE 'image/%'` // Only images for products
+        )
+      )
+      .orderBy(desc(mediaAssets.createdAt))
 
     if (query) {
       searchQuery = searchQuery.where(

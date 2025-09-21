@@ -23,6 +23,7 @@ export * from './tax-shipping'
 
 // Media & Metadata
 export * from './media-metadata'
+export * from './folders'
 
 // System & Audit
 export * from './system'

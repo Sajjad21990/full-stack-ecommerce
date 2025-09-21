@@ -1,0 +1,487 @@
+'use server'
+
+import { db } from '@/db'
+import { eq, and, sql, like, desc } from 'drizzle-orm'
+import { mediaFolders } from '@/db/schema/folders'
+import { mediaAssets } from '@/db/schema/media-metadata'
+import { revalidatePath } from 'next/cache'
+import { storage, isFirebaseConfigured } from '@/lib/firebase-admin'
+import { requireAdmin } from '@/lib/auth'
+
+interface CreateFolderData {
+  name: string
+  parentId?: string
+}
+
+interface MoveFolderData {
+  folderId: string
+  newParentId?: string
+}
+
+/**
+ * Create a new folder
+ */
+export async function createMediaFolder(data: CreateFolderData) {
+  try {
+    await requireAdmin()
+
+    const { name, parentId } = data
+
+    // Validate folder name
+    if (!name.trim()) {
+      return { success: false, error: 'Folder name is required' }
+    }
+
+    // Sanitize folder name
+    const sanitizedName = name
+      .trim()
+      .replace(/[^a-zA-Z0-9\s-_]/g, '')
+      .replace(/\s+/g, '-')
+
+    if (!sanitizedName) {
+      return { success: false, error: 'Invalid folder name' }
+    }
+
+    // Calculate path and depth
+    let fullPath = sanitizedName
+    let depth = 0
+
+    if (parentId) {
+      const parentFolder = await db
+        .select()
+        .from(mediaFolders)
+        .where(eq(mediaFolders.id, parentId))
+        .limit(1)
+
+      if (parentFolder.length === 0) {
+        return { success: false, error: 'Parent folder not found' }
+      }
+
+      const parent = parentFolder[0]
+      fullPath =
+        parent.path === 'root'
+          ? sanitizedName
+          : `${parent.path}/${sanitizedName}`
+      depth = parseInt(parent.depth) + 1
+
+      if (depth > 10) {
+        return { success: false, error: 'Maximum folder depth exceeded' }
+      }
+    }
+
+    // Check for duplicate folder names in the same parent
+    const existingFolder = await db
+      .select()
+      .from(mediaFolders)
+      .where(
+        and(eq(mediaFolders.path, fullPath), eq(mediaFolders.isDeleted, false))
+      )
+      .limit(1)
+
+    if (existingFolder.length > 0) {
+      return { success: false, error: 'A folder with this name already exists' }
+    }
+
+    // Create folder in database
+    const [folder] = await db
+      .insert(mediaFolders)
+      .values({
+        name: sanitizedName,
+        path: fullPath,
+        parentId: parentId || null,
+        depth: depth.toString(),
+      })
+      .returning()
+
+    // Create folder in Firebase Storage if configured
+    if (isFirebaseConfigured()) {
+      try {
+        const bucket = storage.bucket()
+        const folderRef = bucket.file(`media/${fullPath}/.keep`)
+        await folderRef.save('', {
+          metadata: { contentType: 'text/plain' },
+        })
+      } catch (error) {
+        console.warn('Failed to create folder in Firebase:', error)
+        // Don't fail the operation if Firebase creation fails
+      }
+    }
+
+    revalidatePath('/admin/media')
+    return { success: true, folder }
+  } catch (error) {
+    console.error('Error creating folder:', error)
+    return { success: false, error: 'Failed to create folder' }
+  }
+}
+
+/**
+ * Get folder tree structure
+ */
+export async function getFolderTree() {
+  try {
+    await requireAdmin()
+
+    const folders = await db
+      .select({
+        id: mediaFolders.id,
+        name: mediaFolders.name,
+        path: mediaFolders.path,
+        parentId: mediaFolders.parentId,
+        depth: mediaFolders.depth,
+        createdAt: mediaFolders.createdAt,
+        // Count files in folder
+        fileCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${mediaAssets}
+          WHERE folder = ${mediaFolders.path}
+          AND status = 'active'
+        )`,
+        // Count subfolders
+        subfolderCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${mediaFolders} AS sub
+          WHERE sub.parent_id = ${mediaFolders.id}
+          AND sub.is_deleted = false
+        )`,
+      })
+      .from(mediaFolders)
+      .where(eq(mediaFolders.isDeleted, false))
+      .orderBy(mediaFolders.depth, mediaFolders.name)
+
+    // Build tree structure
+    const folderMap = new Map()
+    const rootFolders: any[] = []
+
+    // First pass: create all folder objects
+    folders.forEach((folder) => {
+      folderMap.set(folder.id, {
+        ...folder,
+        children: [],
+        totalFiles: folder.fileCount,
+        totalFolders: folder.subfolderCount,
+      })
+    })
+
+    // Second pass: build hierarchy
+    folders.forEach((folder) => {
+      const folderObj = folderMap.get(folder.id)
+
+      if (folder.parentId) {
+        const parent = folderMap.get(folder.parentId)
+        if (parent) {
+          parent.children.push(folderObj)
+        }
+      } else {
+        rootFolders.push(folderObj)
+      }
+    })
+
+    return { success: true, folders: rootFolders }
+  } catch (error) {
+    console.error('Error fetching folder tree:', error)
+    return { success: false, error: 'Failed to fetch folders', folders: [] }
+  }
+}
+
+/**
+ * Delete a folder and all its contents
+ */
+export async function deleteMediaFolder(folderId: string) {
+  try {
+    await requireAdmin()
+
+    const folder = await db
+      .select()
+      .from(mediaFolders)
+      .where(eq(mediaFolders.id, folderId))
+      .limit(1)
+
+    if (folder.length === 0) {
+      return { success: false, error: 'Folder not found' }
+    }
+
+    const folderData = folder[0]
+
+    // Get all subfolders and files
+    const subfolders = await db
+      .select()
+      .from(mediaFolders)
+      .where(
+        and(
+          like(mediaFolders.path, `${folderData.path}%`),
+          eq(mediaFolders.isDeleted, false)
+        )
+      )
+
+    const files = await db
+      .select()
+      .from(mediaAssets)
+      .where(like(mediaAssets.folder, `${folderData.path}%`))
+
+    // Check if any files are in use
+    const filesInUse = files.filter((file) => file.usageCount > 0)
+    if (filesInUse.length > 0) {
+      return {
+        success: false,
+        error: `Cannot delete folder. ${filesInUse.length} file(s) are currently in use.`,
+      }
+    }
+
+    // Delete from Firebase Storage if configured
+    if (isFirebaseConfigured()) {
+      try {
+        const bucket = storage.bucket()
+
+        // Delete all files in the folder
+        for (const file of files) {
+          try {
+            await bucket.file(file.storagePath).delete()
+            if (file.thumbnailUrl) {
+              const thumbnailPath = file.storagePath
+                .replace('/media/', '/media/thumbs/')
+                .replace(/\.[^/.]+$/, '.jpg')
+              await bucket.file(thumbnailPath).delete()
+            }
+          } catch (error) {
+            console.warn(`Failed to delete file ${file.fileName}:`, error)
+          }
+        }
+
+        // Delete folder placeholder files
+        for (const subfolder of subfolders) {
+          try {
+            await bucket.file(`media/${subfolder.path}/.keep`).delete()
+          } catch (error) {
+            console.warn(`Failed to delete folder ${subfolder.path}:`, error)
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to delete from Firebase:', error)
+      }
+    }
+
+    // Mark folders as deleted
+    await db
+      .update(mediaFolders)
+      .set({
+        isDeleted: true,
+        updatedAt: new Date(),
+      })
+      .where(like(mediaFolders.path, `${folderData.path}%`))
+
+    // Delete media files
+    await db
+      .delete(mediaAssets)
+      .where(like(mediaAssets.folder, `${folderData.path}%`))
+
+    revalidatePath('/admin/media')
+    return {
+      success: true,
+      message: `Deleted folder "${folderData.name}" and ${files.length} file(s)`,
+    }
+  } catch (error) {
+    console.error('Error deleting folder:', error)
+    return { success: false, error: 'Failed to delete folder' }
+  }
+}
+
+/**
+ * Move a folder to a new parent
+ */
+export async function moveMediaFolder(data: MoveFolderData) {
+  try {
+    await requireAdmin()
+
+    const { folderId, newParentId } = data
+
+    const folder = await db
+      .select()
+      .from(mediaFolders)
+      .where(eq(mediaFolders.id, folderId))
+      .limit(1)
+
+    if (folder.length === 0) {
+      return { success: false, error: 'Folder not found' }
+    }
+
+    const folderData = folder[0]
+    let newPath = folderData.name
+    let newDepth = 0
+
+    if (newParentId) {
+      // Check if trying to move to a descendant (would create a loop)
+      const descendants = await db
+        .select()
+        .from(mediaFolders)
+        .where(like(mediaFolders.path, `${folderData.path}/%`))
+
+      if (descendants.some((desc) => desc.id === newParentId)) {
+        return {
+          success: false,
+          error: 'Cannot move folder to its own descendant',
+        }
+      }
+
+      const newParent = await db
+        .select()
+        .from(mediaFolders)
+        .where(eq(mediaFolders.id, newParentId))
+        .limit(1)
+
+      if (newParent.length === 0) {
+        return { success: false, error: 'New parent folder not found' }
+      }
+
+      const parent = newParent[0]
+      newPath =
+        parent.path === 'root'
+          ? folderData.name
+          : `${parent.path}/${folderData.name}`
+      newDepth = parseInt(parent.depth) + 1
+
+      if (newDepth > 10) {
+        return { success: false, error: 'Maximum folder depth exceeded' }
+      }
+    }
+
+    // Check for duplicate names
+    const duplicate = await db
+      .select()
+      .from(mediaFolders)
+      .where(
+        and(eq(mediaFolders.path, newPath), eq(mediaFolders.isDeleted, false))
+      )
+      .limit(1)
+
+    if (duplicate.length > 0 && duplicate[0].id !== folderId) {
+      return {
+        success: false,
+        error: 'A folder with this name already exists in the destination',
+      }
+    }
+
+    // Update folder and all its descendants
+    const oldPath = folderData.path
+    const pathDifference = newPath.length - oldPath.length
+
+    // Get all descendants
+    const descendants = await db
+      .select()
+      .from(mediaFolders)
+      .where(like(mediaFolders.path, `${oldPath}%`))
+
+    // Update each descendant's path
+    for (const desc of descendants) {
+      const updatedPath = desc.path.replace(oldPath, newPath)
+      const updatedDepth =
+        parseInt(desc.depth) + (newDepth - parseInt(folderData.depth))
+
+      await db
+        .update(mediaFolders)
+        .set({
+          path: updatedPath,
+          depth: updatedDepth.toString(),
+          parentId: desc.id === folderId ? newParentId : desc.parentId,
+          updatedAt: new Date(),
+        })
+        .where(eq(mediaFolders.id, desc.id))
+    }
+
+    // Update media files
+    await db
+      .update(mediaAssets)
+      .set({
+        folder: sql`REPLACE(folder, ${oldPath}, ${newPath})`,
+        updatedAt: new Date(),
+      })
+      .where(like(mediaAssets.folder, `${oldPath}%`))
+
+    revalidatePath('/admin/media')
+    return { success: true, message: 'Folder moved successfully' }
+  } catch (error) {
+    console.error('Error moving folder:', error)
+    return { success: false, error: 'Failed to move folder' }
+  }
+}
+
+/**
+ * Rename a folder
+ */
+export async function renameMediaFolder(folderId: string, newName: string) {
+  try {
+    await requireAdmin()
+
+    const sanitizedName = newName
+      .trim()
+      .replace(/[^a-zA-Z0-9\s-_]/g, '')
+      .replace(/\s+/g, '-')
+
+    if (!sanitizedName) {
+      return { success: false, error: 'Invalid folder name' }
+    }
+
+    const folder = await db
+      .select()
+      .from(mediaFolders)
+      .where(eq(mediaFolders.id, folderId))
+      .limit(1)
+
+    if (folder.length === 0) {
+      return { success: false, error: 'Folder not found' }
+    }
+
+    const folderData = folder[0]
+    const pathParts = folderData.path.split('/')
+    pathParts[pathParts.length - 1] = sanitizedName
+    const newPath = pathParts.join('/')
+
+    // Check for duplicates
+    const duplicate = await db
+      .select()
+      .from(mediaFolders)
+      .where(
+        and(eq(mediaFolders.path, newPath), eq(mediaFolders.isDeleted, false))
+      )
+      .limit(1)
+
+    if (duplicate.length > 0) {
+      return { success: false, error: 'A folder with this name already exists' }
+    }
+
+    // Update folder and descendants
+    const oldPath = folderData.path
+    const descendants = await db
+      .select()
+      .from(mediaFolders)
+      .where(like(mediaFolders.path, `${oldPath}%`))
+
+    for (const desc of descendants) {
+      const updatedPath = desc.path.replace(oldPath, newPath)
+
+      await db
+        .update(mediaFolders)
+        .set({
+          name: desc.id === folderId ? sanitizedName : desc.name,
+          path: updatedPath,
+          updatedAt: new Date(),
+        })
+        .where(eq(mediaFolders.id, desc.id))
+    }
+
+    // Update media files
+    await db
+      .update(mediaAssets)
+      .set({
+        folder: sql`REPLACE(folder, ${oldPath}, ${newPath})`,
+        updatedAt: new Date(),
+      })
+      .where(like(mediaAssets.folder, `${oldPath}%`))
+
+    revalidatePath('/admin/media')
+    return { success: true, message: 'Folder renamed successfully' }
+  } catch (error) {
+    console.error('Error renaming folder:', error)
+    return { success: false, error: 'Failed to rename folder' }
+  }
+}

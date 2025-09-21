@@ -5,7 +5,7 @@ const nextConfig = {
     optimizePackageImports: ['@/components/ui', 'lucide-react'],
     scrollRestoration: true,
   },
-  
+
   // Image optimization
   images: {
     remotePatterns: [
@@ -24,7 +24,11 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
-      }
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+      },
     ],
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
@@ -35,10 +39,10 @@ const nextConfig = {
 
   // Compression
   compress: true,
-  
+
   // Static generation
   output: 'standalone',
-  
+
   // Bundle analyzer (enable for debugging)
   // bundleAnalyzer: {
   //   enabled: process.env.ANALYZE === 'true',
@@ -53,40 +57,41 @@ const nextConfig = {
           // Security headers
           {
             key: 'X-DNS-Prefetch-Control',
-            value: 'on'
+            value: 'on',
           },
           {
             key: 'X-XSS-Protection',
-            value: '1; mode=block'
+            value: '1; mode=block',
           },
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            value: 'SAMEORIGIN',
           },
           {
             key: 'X-Content-Type-Options',
-            value: 'nosniff'
+            value: 'nosniff',
           },
           {
             key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin'
+            value: 'origin-when-cross-origin',
           },
           // Performance headers
           {
             key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          }
+            value: 'on',
+          },
         ],
       },
       // Cache static assets
       {
-        source: '/(.*)\\.(ico|png|jpg|jpeg|gif|webp|avif|svg|woff|woff2|ttf|eot)$',
+        source:
+          '/(.*)\\.(ico|png|jpg|jpeg|gif|webp|avif|svg|woff|woff2|ttf|eot)$',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
       },
       // Cache API routes
       {
@@ -94,10 +99,10 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=300, stale-while-revalidate=60'
-          }
-        ]
-      }
+            value: 'public, max-age=300, stale-while-revalidate=60',
+          },
+        ],
+      },
     ]
   },
 
@@ -125,7 +130,7 @@ const nextConfig = {
       {
         source: '/collection/:handle',
         destination: '/collections/:handle',
-      }
+      },
     ]
   },
 
@@ -138,7 +143,7 @@ const nextConfig = {
         '@/components/ui': '@/components/ui/index',
       }
     }
-    
+
     return config
   },
 

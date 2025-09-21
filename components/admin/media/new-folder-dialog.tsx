@@ -1,29 +1,29 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Folder } from 'lucide-react'
-import { createMediaFolder } from '@/lib/admin/actions/media'
+import { createMediaFolder } from '@/lib/admin/actions/folders'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
 interface NewFolderDialogProps {
   trigger?: React.ReactNode
-  parentFolder?: string
+  parentId?: string
 }
 
-export function NewFolderDialog({ trigger, parentFolder }: NewFolderDialogProps) {
+export function NewFolderDialog({ trigger, parentId }: NewFolderDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,8 +35,8 @@ export function NewFolderDialog({ trigger, parentFolder }: NewFolderDialogProps)
 
     setLoading(true)
     try {
-      const result = await createMediaFolder(name.trim(), parentFolder)
-      
+      const result = await createMediaFolder({ name: name.trim(), parentId })
+
       if (result.success) {
         toast.success('Folder created successfully')
         setName('')
@@ -67,10 +67,10 @@ export function NewFolderDialog({ trigger, parentFolder }: NewFolderDialogProps)
           <DialogHeader>
             <DialogTitle>Create New Folder</DialogTitle>
             <DialogDescription>
-              Enter a name for the new folder{parentFolder ? ` in ${parentFolder}` : ''}.
+              Enter a name for the new folder.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="folder-name">Folder Name</Label>
@@ -87,9 +87,9 @@ export function NewFolderDialog({ trigger, parentFolder }: NewFolderDialogProps)
           </div>
 
           <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setOpen(false)}
               disabled={loading}
             >
