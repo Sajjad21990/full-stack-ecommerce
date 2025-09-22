@@ -13,6 +13,14 @@ import { requireAdmin } from '@/lib/auth'
  */
 async function checkDatabaseConnection() {
   try {
+    // Check if db object has the select method (not a mock)
+    if (!db || typeof db.select !== 'function') {
+      console.error(
+        '[checkDatabaseConnection] Database is not properly initialized'
+      )
+      return false
+    }
+
     await db.select().from(mediaFolders).limit(1)
     console.log('[checkDatabaseConnection] Database connection is healthy')
     return true
@@ -21,6 +29,7 @@ async function checkDatabaseConnection() {
       error: error,
       message: error.message,
       code: error.code,
+      name: error.name,
     })
     return false
   }
@@ -46,12 +55,30 @@ export async function createMediaFolder(data: CreateFolderData) {
       parentId: data.parentId,
       environment: process.env.NODE_ENV,
       railway: !!process.env.RAILWAY_ENVIRONMENT,
+      railwayDeployment: !!process.env.RAILWAY_DEPLOYMENT_ID,
       databaseUrl: process.env.DATABASE_URL ? 'configured' : 'not configured',
+      dbType: typeof db,
+      hasSelect: typeof db?.select,
     })
 
     // Check database connection first
     const dbHealthy = await checkDatabaseConnection()
     if (!dbHealthy) {
+      console.error('[createMediaFolder] Database health check failed')
+
+      // Try to re-establish connection or provide more context
+      const errorDetails = {
+        dbAvailable: !!db,
+        hasSelectMethod: typeof db?.select === 'function',
+        environment: process.env.NODE_ENV,
+        isRailway: !!process.env.RAILWAY_ENVIRONMENT,
+      }
+
+      console.error(
+        '[createMediaFolder] Database connection details:',
+        errorDetails
+      )
+
       return {
         success: false,
         error: 'Database connection failed. Please try again.',

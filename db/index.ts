@@ -28,27 +28,37 @@ if (isRailwayBuild && process.env.DATABASE_PUBLIC_URL) {
 // Create client only if a connection string is available
 let db: ReturnType<typeof drizzle>
 
-if (connectionString && !connectionString.includes('undefined')) {
-  try {
-    const client = postgres(connectionString!, {
-      max: process.env.NODE_ENV === 'production' ? 10 : 1,
-      ssl:
-        process.env.NODE_ENV === 'production' &&
-        !connectionString.includes('localhost')
-          ? 'require'
-          : undefined,
-      idle_timeout: 20,
-      connect_timeout: 10,
-    })
+// Function to initialize database connection
+function initializeDatabase() {
+  if (connectionString && !connectionString.includes('undefined')) {
+    try {
+      const client = postgres(connectionString!, {
+        max: process.env.NODE_ENV === 'production' ? 10 : 1,
+        ssl:
+          process.env.NODE_ENV === 'production' &&
+          !connectionString.includes('localhost')
+            ? 'require'
+            : undefined,
+        idle_timeout: 20,
+        connect_timeout: 10,
+      })
 
-    db = drizzle(client, { schema })
-  } catch (error) {
-    console.error('Database connection error:', error)
-    // Create a mock db object for build time
-    db = {} as any
+      return drizzle(client, { schema })
+    } catch (error) {
+      console.error('Database connection error:', error)
+      return null
+    }
   }
+  return null
+}
+
+// Initialize database
+const initializedDb = initializeDatabase()
+
+if (initializedDb) {
+  db = initializedDb
 } else {
-  // Mock db for build time when no database URL is available
+  // Create a mock db object for build time or when connection fails
   console.warn('⚠️ No database connection available, using mock db')
   db = {} as any
 }
