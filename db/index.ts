@@ -2,17 +2,35 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
 
-// Railway provides DATABASE_URL with internal hostname during runtime
-// During build, we need to handle database connection differently
-const connectionString = process.env.DATABASE_URL!
+// Detect if we're in Railway build environment
+// During build: RAILWAY_ENVIRONMENT exists but app is not yet deployed
+// During runtime: App is deployed and internal URL works
+const isRailwayBuild =
+  process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_DEPLOYMENT_ID
 
-// Create client only if DATABASE_URL is available
-// This prevents build errors when database isn't accessible during static generation
+// Railway provides two database URLs:
+// - DATABASE_URL: Internal URL (no egress fees, only works at runtime)
+// - DATABASE_PUBLIC_URL: Public URL (works during build, incurs egress fees)
+//
+// Strategy: Use public URL only during build, internal URL at runtime
+const connectionString = isRailwayBuild
+  ? process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL
+  : process.env.DATABASE_URL
+
+if (isRailwayBuild && process.env.DATABASE_PUBLIC_URL) {
+  console.log('🔨 Build phase: Using DATABASE_PUBLIC_URL for static generation')
+} else if (isRailwayBuild) {
+  console.log(
+    '⚠️ Build phase: DATABASE_PUBLIC_URL not found, build may fail for static pages'
+  )
+}
+
+// Create client only if a connection string is available
 let db: ReturnType<typeof drizzle>
 
 if (connectionString && !connectionString.includes('undefined')) {
   try {
-    const client = postgres(connectionString, {
+    const client = postgres(connectionString!, {
       max: process.env.NODE_ENV === 'production' ? 10 : 1,
       ssl:
         process.env.NODE_ENV === 'production' &&
@@ -30,7 +48,8 @@ if (connectionString && !connectionString.includes('undefined')) {
     db = {} as any
   }
 } else {
-  // Mock db for build time
+  // Mock db for build time when no database URL is available
+  console.warn('⚠️ No database connection available, using mock db')
   db = {} as any
 }
 
